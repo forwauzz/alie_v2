@@ -135,3 +135,33 @@ def test_electronic_signature_date_is_labelled(role_for):
                    role_for, anchors=(2020, 2025))
     assert fact.role is DateRole.SIGNATURE
     assert fact.readings[0] == date(2023, 12, 14)
+
+
+def test_an_unlabelled_date_is_a_last_resort_not_a_discard(pack, role_for):
+    """§8.4's ineligible list is closed — event, received, fax, print, birth, death — and
+    `unknown` is not on it. Treating an unlabelled date as unusable discarded 370 dates
+    across the reference case and left 31 units undated with their date on the page."""
+    facts = find("2024-08-27", role_for, anchors=(2022, 2025))
+    chosen = dateselect.select(facts, doc_class="rapport_medical", pack=pack)
+
+    assert chosen.value == date(2024, 8, 27)
+    assert chosen.status is RowStatus.INFERRED  # never passes as resolved
+    assert "no recognised label" in chosen.explanation.lower()
+
+
+def test_a_labelled_date_still_outranks_an_unlabelled_one(pack, role_for):
+    facts = find("2024-01-05", role_for) + find("Date de l'examen: 2023-08-01", role_for)
+    chosen = dateselect.select(facts, doc_class="rapport_imagerie", pack=pack)
+
+    assert chosen.value == date(2023, 8, 1)
+    assert chosen.role is DateRole.EXAM
+    assert chosen.status is RowStatus.RESOLVED
+
+
+def test_structurally_ineligible_dates_are_still_never_used(pack, role_for):
+    """A date of birth must not become a row date just because nothing else is labelled."""
+    facts = find("Date de naissance: 1970-07-16", role_for)
+    chosen = dateselect.select(facts, doc_class="rapport_medical", pack=pack)
+
+    assert chosen.status is RowStatus.UNDATED
+    assert chosen.value is None

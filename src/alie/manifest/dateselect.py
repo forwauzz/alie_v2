@@ -64,6 +64,33 @@ def select(
             source=chosen,
         )
 
+    # A date nobody could label is not the same as a date that may not be used. §8.4's
+    # ineligible list is explicit and closed — event, received, fax, print, birth, death —
+    # and `unknown` is not on it. Treating it as ineligible discarded 370 dates across the
+    # reference case and left 31 units undated while their date sat on the page.
+    #
+    # Last resort, and never silent: the row reads `inferred` and says the label was not
+    # recognised, so it surfaces in review rather than passing as resolved.
+    unlabelled = sorted(
+        (f for f in facts if f.role is DateRole.UNKNOWN and not f.is_ambiguous),
+        key=_reading_order,
+    )
+    if unlabelled:
+        chosen = unlabelled[0]
+        return RowDate(
+            value=chosen.readings[0],
+            status=RowStatus.INFERRED,
+            role=DateRole.UNKNOWN,
+            rule=rule,
+            explanation=(
+                f"No labelled date for {doc_class}; used {chosen.raw!r}, the first of "
+                f"{len(unlabelled)} date(s) on the unit carrying no recognised label. "
+                "Needs a human to confirm which date this row belongs to."
+            ),
+            alternatives=tuple(f.readings[0] for f in unlabelled[1:4]),
+            source=chosen,
+        )
+
     return RowDate(
         value=None,
         status=RowStatus.UNDATED,
