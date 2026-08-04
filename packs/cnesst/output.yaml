@@ -24,6 +24,10 @@ rows:
   # Undated rows lead the document, so they are the first thing reviewed rather than the
   # last thing discovered (§8.5).
   undated_heading: "SANS DATE — {n} documents à dater"
+  # The removal manifest's heading (§10.1). Stated here rather than left to the engine's
+  # fallback: wording that reaches a document the firm hands to opposing counsel is the
+  # pack's business, and a firm layer can only restate what the pack declares.
+  removed_heading: "RETIRÉ PAR RÈGLE — {n} document(s), conservés au dossier"
   illegible_label: "Illisible"
   second_hand_marker: "(cité dans {locator})"
   ambiguous_date_marker: " (?)"

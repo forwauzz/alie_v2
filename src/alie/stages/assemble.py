@@ -109,8 +109,8 @@ def run(conn: sqlite3.Connection, case_id: str, *, run_id: str | None = None) ->
 
     rows: list[Row] = []
     merged = unions = studies = 0
-    for group in buckets.values():
-        row = _build_row(conn, case_id, group, pack, labels)
+    for key, group in buckets.items():
+        row = _build_row(conn, case_id, group, pack, labels, key)
         _attribute_claim(row, group, attributions)
         row.excluded_by = held_back(group[0])
         rows.append(row)
@@ -168,10 +168,19 @@ def _build_row(
     group: list[ReportUnit],
     pack: Pack,
     labels: dict[str, dict[int, str | None]],
+    bucket_key: tuple,
 ) -> Row:
     group = sorted(group, key=lambda u: (u.bundle_id, u.pages))
     lead = group[0]
-    row_id = f"row_{hash_text(case_id + '|' + '|'.join(u.id for u in group))[:20]}"
+    # Derived from the *bucket key* — the encounter this row represents — not from the
+    # units that happen to contribute to it. A second bundle unioning into an existing
+    # encounter must keep the row's identity; keying on the unit set changed the id, so a
+    # delta reported "2 existing rows gained a second locator" as two deletions plus two
+    # insertions, which is the exact failure §10.3 is written against.
+    #
+    # Undated and illegible units bucket on themselves and so still key on the unit: they
+    # have no encounter identity to be stable about.
+    row_id = f"row_{hash_text(case_id + '|' + repr(bucket_key))[:20]}"
 
     illegible = any(u.legibility is Legibility.ILLEGIBLE for u in group)
     classes = sorted({pack.class_label(u.doc_class) for u in group})

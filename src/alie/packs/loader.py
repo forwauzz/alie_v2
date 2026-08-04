@@ -19,6 +19,11 @@ from ..config import SETTINGS
 
 _FILES = ("pack", "classes", "dates", "filters", "fields", "output")
 
+#: What a firm may restate. Style, wording and which classes it wants to see — never the
+#: regime's own rules. Classes, date roles and filters are regime facts; a firm editing
+#: them would make the pack a suggestion and put regime knowledge in two places (§6.3).
+_FIRM_LAYERABLE = ("output", "pack")
+
 #: `confounder.cont1` — the tail of a sentence that ran past its own block. Each part keeps
 #: its own span, because a record carries one span and the citation invariant is per string
 #: (§8.1).
@@ -30,6 +35,9 @@ class Pack:
     id: str
     version: str
     root: Path
+    #: The firm layer applied over this pack, if any (§6.3). Recorded so a run's producer
+    #: stamp says whose house style produced the wording.
+    firm: str | None = None
     pack: dict[str, Any] = field(default_factory=dict)
     classes: dict[str, Any] = field(default_factory=dict)
     dates: dict[str, Any] = field(default_factory=dict)
@@ -142,18 +150,56 @@ def _read(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-@lru_cache(maxsize=16)
-def load(pack_id: str, packs_dir: str | None = None) -> Pack:
+def _overlay(base: dict[str, Any], layer: dict[str, Any]) -> dict[str, Any]:
+    """Merge one layer over another, deepest key wins.
+
+    Mappings merge; lists and scalars **replace**. A firm that overrides `field_lines` is
+    restating that one line's wording, not appending a second copy of it — and a firm that
+    overrides a list of patterns means *these* patterns, not these plus the pack's.
+    """
+    out = dict(base)
+    for key, value in layer.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _overlay(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+@lru_cache(maxsize=32)
+def load(pack_id: str, packs_dir: str | None = None, firm: str | None = None) -> Pack:
+    """Load a pack, optionally with a firm layer over it.
+
+    Resolution order is base -> pack -> firm -> case -> unit (§6.3). The firm layer exists
+    because style is per-firm and arguably per-paralegal; without it, onboarding firm #2
+    means forking a pack, and the fork drifts from the regime rules it was supposed to
+    inherit.
+
+    A firm may only restate what a pack already declares. It cannot invent a class, a date
+    role or a filter — those are regime facts, not house style, and letting a firm edit
+    them would turn a styling layer into a second place regime knowledge lives.
+    """
     root = Path(packs_dir) if packs_dir else SETTINGS.packs_dir
     pack_root = root / pack_id
     if not pack_root.is_dir():
         raise KeyError(f"unknown pack: {pack_id} (looked in {root})")
     parts = {name: _read(pack_root / f"{name}.yaml") for name in _FILES}
+
+    if firm:
+        firm_root = root / pack_id / "firms" / firm
+        if not firm_root.is_dir():
+            raise KeyError(f"unknown firm layer: {firm} for pack {pack_id}")
+        for name in _FIRM_LAYERABLE:
+            layer = _read(firm_root / f"{name}.yaml")
+            if layer:
+                parts[name] = _overlay(parts[name], layer)
+
     meta = parts["pack"]
     return Pack(
         id=meta.get("id", pack_id),
         version=str(meta.get("version", "0")),
         root=pack_root,
+        firm=firm,
         **parts,
     )
 

@@ -1,0 +1,8 @@
+# House style. Everything not restated here is inherited from the pack.
+
+rows:
+  undated_heading: "À DATER — {n} document(s)"
+
+field_lines:
+  # This firm writes the milestone in full rather than as a label.
+  consolidation: "Lésion consolidée : {value}"
