@@ -264,3 +264,21 @@ def test_a_banner_without_a_page_count_is_not_a_transmission():
 
     assert parse_banner("Tél.: (579) 995-0789 Fax : (450) 500-0776") is None
     assert parse_banner("PAGE 20/15") is None  # position beyond the total
+
+
+def test_author_is_the_signer_not_the_signature_boilerplate(pack):
+    """`Signé électroniquement le 2023-12-14 à 10:03 par: Dr X` — taking everything after
+    `Signé` put a date and a timestamp in the row title the firm reads."""
+    from alie.manifest.boundaries import _author
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    def signature(text):
+        return [Block(id="s", bundle_id="b", pdf_index=1, type=BlockType.SIGNATURE,
+                      text=text, bbox=BBox(0, 0, 10, 10), source=BlockSource.OCR,
+                      confidence=0.9, order=0)]
+
+    assert _author(signature(
+        "Signé électroniquement le 2023-12-14 à 10:03 par: Dr Marie-France LABERGE"
+    )) == "Dr Marie-France LABERGE"
+    assert _author(signature("Signé: Dre Claire Fontaine")) == "Dre Claire Fontaine"
+    assert _author(signature("Signé le 12 décembre 1992")) == "le 12 décembre 1992"

@@ -125,3 +125,13 @@ def test_every_selection_explains_itself_in_one_line(pack, role_for):
     assert chosen.explanation
     assert "\n" not in chosen.explanation
     assert chosen.rule.startswith("cnesst.dates.")
+
+
+def test_electronic_signature_date_is_labelled(role_for):
+    """EMR exports sign `Signé électroniquement le … par: Dr X`. Without the optional
+    adverb the cue never matched, so the signature date went unlabelled and the row came
+    out undated with its date sitting in plain view."""
+    (fact,) = find("Signé électroniquement le 2023-12-14 à 10:03 par: Dr Marie-France LABERGE",
+                   role_for, anchors=(2020, 2025))
+    assert fact.role is DateRole.SIGNATURE
+    assert fact.readings[0] == date(2023, 12, 14)

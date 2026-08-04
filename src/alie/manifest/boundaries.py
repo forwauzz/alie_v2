@@ -84,11 +84,23 @@ def _serial(blocks: list[Block]) -> tuple[str | None, str | None]:
     return None, None
 
 
+#: `Signé électroniquement le 2023-12-14 à 10:03 par: Dr Marie-France LABERGE`.
+#: EMR exports sign this way, and taking everything after `Signé` made the author read as
+#: a date and a timestamp.
+SIGNED_BY = re.compile(r"\bpar\s*:?\s*(?P<who>.+)$", re.IGNORECASE)
+SIGNATURE_PREFIX = re.compile(
+    r"^\s*(sign[ée]e?|approuv[ée]e?)\s*(électroniquement|numériquement)?\s*(par|:)?\s*",
+    re.IGNORECASE,
+)
+
+
 def _author(blocks: list[Block]) -> str | None:
     for b in blocks:
         if b.type is BlockType.SIGNATURE:
-            text = re.sub(r"^\s*sign[ée]e?\s*(par|:)?\s*", "", b.text, flags=re.IGNORECASE)
-            return text.strip(" .:") or None
+            if m := SIGNED_BY.search(b.text):
+                return m.group("who").strip(" .:,") or None
+            text = SIGNATURE_PREFIX.sub("", b.text)
+            return text.strip(" .:,") or None
     return None
 
 

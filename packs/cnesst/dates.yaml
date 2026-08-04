@@ -45,7 +45,11 @@ roles:
   signature:
     tag: KEY
     cues:
-      - "\\bsign[ée]e?\\s+le\\b"
+      # EMR exports sign `Signé électroniquement le 2023-12-14 à 10:03 par: Dr X`, so the
+      # adverb has to be optional or the signature date is never labelled and the row ends
+      # up undated with its date sitting in plain view.
+      - "\\bsign[ée]e?\\s+(?:[ée]lectroniquement\\s+|num[ée]riquement\\s+)?le\\b"
+      - "\\bapprouv[ée]e?\\s+(?:[ée]lectroniquement\\s+)?le\\b"
       - "\\bdate\\s*de\\s*(?:la\\s*)?signature"
   report:
     tag: KEY
