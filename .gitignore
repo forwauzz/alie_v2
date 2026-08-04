@@ -34,3 +34,6 @@ Thumbs.db
 # Web build tooling
 web/node_modules/
 web/tsconfig.tsbuildinfo
+
+# Build output
+web/dist/
