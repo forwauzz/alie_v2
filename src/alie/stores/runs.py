@@ -15,6 +15,11 @@ from .db import new_id, now
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 
+#: A run abandoned because a newer one for the same case took over.
+SUPERSEDED = "superseded"
+
+TERMINAL = (DONE, FAILED, SUPERSEDED)
+
 
 def create_run(
     conn: sqlite3.Connection,
@@ -62,10 +67,39 @@ def runs_for_case(conn: sqlite3.Connection, case_id: str) -> list[dict]:
 
 
 def set_run_status(conn: sqlite3.Connection, run_id: str, status: str) -> None:
-    finished = now() if status in (DONE, FAILED) else None
+    finished = now() if status in TERMINAL else None
     conn.execute(
         "UPDATE runs SET status = ?, finished_at = ? WHERE id = ?", (status, finished, run_id)
     )
+
+
+def supersede_unfinished(conn: sqlite3.Connection, case_id: str, keep_run_id: str) -> list[str]:
+    """Abandon every other in-flight run for this case.
+
+    The manifest is per-case and singular — it is the product, and it survives re-runs
+    (§4.5). Two runs resolving different implementation flags would rebuild it
+    concurrently and the chronology would be assembled from a mixture. Approval creates a
+    new run (§9 rule 3), and that new run owns the case.
+
+    Work already done is not lost: blocks and manifest rows are stored, so the new run
+    recomputes only what its own flag set changes.
+    """
+    marks = ",".join("?" for _ in TERMINAL)
+    stale = [
+        r["id"]
+        for r in conn.execute(
+            f"""SELECT id FROM runs
+                WHERE case_id = ? AND id <> ? AND status NOT IN ({marks})""",
+            (case_id, keep_run_id, *TERMINAL),
+        )
+    ]
+    for run_id in stale:
+        conn.execute(
+            "UPDATE jobs SET status = ?, finished_at = ? WHERE run_id = ? AND status = ?",
+            (SUPERSEDED, now(), run_id, QUEUED),
+        )
+        set_run_status(conn, run_id, SUPERSEDED)
+    return stale
 
 
 def enqueue(conn: sqlite3.Connection, run_id: str, stage: str, payload: dict[str, Any]) -> str:
@@ -80,25 +114,38 @@ def enqueue(conn: sqlite3.Connection, run_id: str, stage: str, payload: dict[str
 
 
 def claim_next(conn: sqlite3.Connection) -> dict | None:
-    r = conn.execute(
-        "SELECT * FROM jobs WHERE status = ? ORDER BY created_at, id LIMIT 1", (QUEUED,)
-    ).fetchone()
-    if not r:
-        return None
-    conn.execute(
-        "UPDATE jobs SET status = ?, attempts = attempts + 1, started_at = ? WHERE id = ?",
-        (RUNNING, now(), r["id"]),
-    )
-    d = dict(r)
-    d["payload"] = json.loads(d["payload"])
-    d["status"] = RUNNING
-    return d
+    """Atomically take the oldest queued job, or return None.
+
+    The claim is a conditional UPDATE guarded on `status = 'queued'`, so when two workers
+    race for the same row exactly one wins and the loser moves on to the next job. A
+    read-then-update would hand the same job to both.
+    """
+    while True:
+        r = conn.execute(
+            "SELECT * FROM jobs WHERE status = ? ORDER BY created_at, id LIMIT 1", (QUEUED,)
+        ).fetchone()
+        if not r:
+            return None
+        cursor = conn.execute(
+            """UPDATE jobs SET status = ?, attempts = attempts + 1, started_at = ?
+               WHERE id = ? AND status = ?""",
+            (RUNNING, now(), r["id"], QUEUED),
+        )
+        if cursor.rowcount:
+            d = dict(r)
+            d["payload"] = json.loads(d["payload"])
+            d["status"] = RUNNING
+            return d
 
 
-def finish_job(conn: sqlite3.Connection, job_id: str, *, error: str | None = None) -> None:
+def finish_job(
+    conn: sqlite3.Connection, job_id: str, *, error: str | None = None,
+    status: str | None = None,
+) -> None:
+    resolved = status or (FAILED if error else DONE)
     conn.execute(
         "UPDATE jobs SET status = ?, finished_at = ?, error = ? WHERE id = ?",
-        (FAILED if error else DONE, now(), error, job_id),
+        (resolved, now(), error, job_id),
     )
 
 

@@ -9,8 +9,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-import pypdfium2 as pdfium
-
+from ..parse import pdfium as pdfium_io
 from ..provenance import hash_bytes
 from ..stores import audit, blobs, cases
 
@@ -26,11 +25,7 @@ def add_pdf(
     content_hash = hash_bytes(data)
     blobs.put(data, key=content_hash)
 
-    pdf = pdfium.PdfDocument(blobs.path_for(content_hash))
-    try:
-        page_count = len(pdf)
-    finally:
-        pdf.close()
+    page_count = pdfium_io.page_count(str(blobs.path_for(content_hash)))
 
     bundle_id = cases.add_bundle(
         conn,

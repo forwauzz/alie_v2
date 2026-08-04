@@ -99,7 +99,11 @@ def _from_fact(
         rule=rule,
         explanation=(
             f"Role {role} selected from {fact.raw!r}"
-            + (" (century resolved against the file's own year anchors)" if fact.century_inferred else "")
+            + (
+                " (century resolved against the file's own year anchors)"
+                if fact.century_inferred
+                else ""
+            )
             + note
         ),
         source=fact,

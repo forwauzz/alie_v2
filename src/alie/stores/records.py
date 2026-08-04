@@ -30,10 +30,18 @@ class Record:
     model: str | None = None
     id: str | None = None
 
+    #: True when the record asserts something no span can carry — a count, or the absence
+    #: of a field. Derived records are legitimately uncited; transcriptions are not.
+    derived: bool = False
+
     @property
     def is_cited(self) -> bool:
         """An uncited string is a validation failure, not a warning (§3.5)."""
         return self.block_id is not None and self.span_start is not None
+
+    @property
+    def violates_citation_invariant(self) -> bool:
+        return not self.derived and not self.is_cited and self.value is not None
 
 
 def replace_for_unit(
@@ -42,9 +50,9 @@ def replace_for_unit(
     conn.execute("DELETE FROM records WHERE unit_id = ? AND stage = ?", (unit_id, stage))
     conn.executemany(
         """INSERT INTO records (id, unit_id, field, value, stage, block_id, span_start,
-                                span_end, confidence, rule, epistemic_tag, prompt_version,
-                                model, producer)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                span_end, confidence, derived, rule, epistemic_tag,
+                                prompt_version, model, producer)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         [
             (
                 r.id or new_id("rec"),
@@ -56,6 +64,7 @@ def replace_for_unit(
                 r.span_start,
                 r.span_end,
                 r.confidence,
+                1 if r.derived else 0,
                 r.rule,
                 r.epistemic_tag,
                 r.prompt_version,
@@ -78,6 +87,7 @@ def _to_record(r: sqlite3.Row) -> Record:
         span_start=r["span_start"],
         span_end=r["span_end"],
         confidence=r["confidence"],
+        derived=bool(r["derived"]),
         rule=r["rule"],
         epistemic_tag=r["epistemic_tag"],
         prompt_version=r["prompt_version"],

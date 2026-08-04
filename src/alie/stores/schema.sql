@@ -115,6 +115,11 @@ CREATE TABLE IF NOT EXISTS records (
     span_start      INTEGER,
     span_end        INTEGER,
     confidence      REAL NOT NULL,
+    -- A derived record asserts something no span can carry: a count, or the *absence* of
+    -- a field. It has no citation because there is no text to cite, which is a different
+    -- thing from an uncited transcription. Render refuses to turn one into a bullet
+    -- unless the row also carries a cited source (§3.5, §11.3).
+    derived         INTEGER NOT NULL,
     rule            TEXT,
     epistemic_tag   TEXT,
     prompt_version  TEXT,
@@ -152,8 +157,12 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS jobs_run ON jobs(run_id, status);
 
+-- Row identity is derived from content and is deliberately stable across runs: that is
+-- what lets a delta run diff against the approved version instead of producing a fresh
+-- chronology, and what keeps approved rows sticky (§10.3). So the same `id` legitimately
+-- appears in several runs, and the key is the pair.
 CREATE TABLE IF NOT EXISTS rows_out (
-    id               TEXT PRIMARY KEY,
+    id               TEXT NOT NULL,
     run_id           TEXT NOT NULL REFERENCES runs(id),
     case_id          TEXT NOT NULL REFERENCES cases(id),
     date_value       TEXT,
@@ -168,13 +177,15 @@ CREATE TABLE IF NOT EXISTS rows_out (
     unit_ids         TEXT NOT NULL,
     illegible_reason TEXT,
     second_hand      INTEGER NOT NULL,
-    ord              INTEGER NOT NULL
+    ord              INTEGER NOT NULL,
+    PRIMARY KEY (run_id, id)
 );
 CREATE INDEX IF NOT EXISTS rows_run ON rows_out(run_id, ord);
 
 CREATE TABLE IF NOT EXISTS row_bullets (
     id             TEXT PRIMARY KEY,
-    row_id         TEXT NOT NULL REFERENCES rows_out(id),
+    run_id         TEXT NOT NULL REFERENCES runs(id),
+    row_id         TEXT NOT NULL,
     ord            INTEGER NOT NULL,
     text           TEXT NOT NULL,
     confidence     REAL NOT NULL,
@@ -187,17 +198,18 @@ CREATE TABLE IF NOT EXISTS row_bullets (
     span_start     INTEGER,
     span_end       INTEGER
 );
-CREATE INDEX IF NOT EXISTS row_bullets_row ON row_bullets(row_id, ord);
+CREATE INDEX IF NOT EXISTS row_bullets_row ON row_bullets(run_id, row_id, ord);
 
 CREATE TABLE IF NOT EXISTS row_locators (
-    row_id         TEXT NOT NULL REFERENCES rows_out(id),
+    run_id         TEXT NOT NULL REFERENCES runs(id),
+    row_id         TEXT NOT NULL,
     ord            INTEGER NOT NULL,
     bundle_id      TEXT NOT NULL,
     folder_label   TEXT NOT NULL,
     pdf_index      INTEGER NOT NULL,
     printed_label  TEXT,
     unit_id        TEXT NOT NULL,
-    PRIMARY KEY (row_id, ord)
+    PRIMARY KEY (run_id, row_id, ord)
 );
 
 -- Corrections write to the manifest, not the output (§10.2). Each is a labelled example

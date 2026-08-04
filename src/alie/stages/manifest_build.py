@@ -16,9 +16,11 @@ from typing import Any
 
 from ..manifest import boundaries, classify, datefind, dateselect, legibility, rejoin
 from ..models import Block, Legibility, ReportUnit, RowStatus, UnitKind
-from ..packs import Pack, load as load_pack
+from ..packs import Pack
+from ..packs import load as load_pack
 from ..provenance import Producer, hash_text
-from ..stores import audit, blocks as blocks_store, cases, corrections, manifest
+from ..stores import audit, cases, corrections, manifest
+from ..stores import blocks as blocks_store
 
 
 @dataclass(frozen=True)

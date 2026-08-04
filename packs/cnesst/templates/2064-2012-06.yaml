@@ -1,0 +1,50 @@
+# Template registry entry (PRD §4.3). The key is **form id + revision**.
+#
+# CNESST 2064 carries a revision stamp (`2064 (2012-06)`). Coordinates and field order
+# shift between revisions, so an unrecognised revision falls back to 4b. Silently reading
+# the wrong field is worse than having no template.
+#
+# 4a runs before 4b, and 4b fills only what remains. On a REM, 4a produces the barème rows
+# with codes and percentages, the consolidation date and the `[x] Oui` on permanent
+# impairment; 4b handles the LF wording, the named pre-injury trade, the diagnosis
+# compression (§4.2).
+
+form: "2064"
+revision: "2012-06"
+doc_class: rapport_evaluation_medicale
+tag: KEY
+
+fields:
+  - id: atteinte_permanente
+    kind: checkbox
+    tag: KEY
+    anchor: "atteinte\\s*permanente"
+    states:
+      oui: "\\[\\s*[xX✓]\\s*\\]\\s*Oui"
+      non: "\\[\\s*[xX✓]\\s*\\]\\s*Non"
+    # `<empty>` is load-bearing: field present but blank is not field absent (§4.3, §8.6).
+    blank_state: trop_tot
+    absent_state: absent
+
+  - id: consolidation
+    kind: checkbox
+    tag: KEY
+    anchor: "consolidation"
+    states:
+      oui: "\\[\\s*[xX✓]\\s*\\]\\s*Oui"
+      non: "\\[\\s*[xX✓]\\s*\\]\\s*Non"
+    blank_state: trop_tot
+    absent_state: absent
+
+  # Barème codes are stored individually (code, %, `sur antérieur` %) and a total is
+  # derived. Storing only the total loses the ability to check either (§8.6).
+  - id: bareme
+    kind: table_rows
+    tag: KEY
+    under_heading: "bilan\\s*des\\s*s[ée]quelles"
+    row: "^Code\\s+(?P<code>\\d[\\d\\s]*?)\\s+(?P<pct>[\\d]+(?:[.,°]\\d+)?)\\s*%"
+    prior_pct: "(?P<prior>[\\d]+(?:[.,]\\d+)?)\\s*%\\s*sur\\s*ant[ée]rieur"
+    # The count 4a reads here is what makes silent output truncation detectable: valid
+    # JSON with 5 rows where the table holds 8 is a hard flag, and is undetectable
+    # without this deterministic path (§12).
+    emit_expected_count: true

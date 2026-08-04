@@ -15,10 +15,8 @@ from .db import new_id
 
 
 def replace_for_run(conn: sqlite3.Connection, run_id: str, rows: list[Row]) -> None:
-    old = [r["id"] for r in conn.execute("SELECT id FROM rows_out WHERE run_id = ?", (run_id,))]
-    for rid in old:
-        conn.execute("DELETE FROM row_bullets WHERE row_id = ?", (rid,))
-        conn.execute("DELETE FROM row_locators WHERE row_id = ?", (rid,))
+    conn.execute("DELETE FROM row_bullets WHERE run_id = ?", (run_id,))
+    conn.execute("DELETE FROM row_locators WHERE run_id = ?", (run_id,))
     conn.execute("DELETE FROM rows_out WHERE run_id = ?", (run_id,))
 
     for ord_, row in enumerate(rows):
@@ -49,13 +47,14 @@ def replace_for_run(conn: sqlite3.Connection, run_id: str, rows: list[Row]) -> N
             ),
         )
         conn.executemany(
-            """INSERT INTO row_bullets (id, row_id, ord, text, confidence, rule, bundle_id,
-                                        pdf_index, printed_label, unit_id, block_id,
-                                        span_start, span_end)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO row_bullets (id, run_id, row_id, ord, text, confidence, rule,
+                                        bundle_id, pdf_index, printed_label, unit_id,
+                                        block_id, span_start, span_end)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 (
                     new_id("bul"),
+                    run_id,
                     row.id,
                     i,
                     b.text,
@@ -73,11 +72,12 @@ def replace_for_run(conn: sqlite3.Connection, run_id: str, rows: list[Row]) -> N
             ],
         )
         conn.executemany(
-            """INSERT INTO row_locators (row_id, ord, bundle_id, folder_label, pdf_index,
-                                         printed_label, unit_id)
-               VALUES (?,?,?,?,?,?,?)""",
+            """INSERT INTO row_locators (run_id, row_id, ord, bundle_id, folder_label,
+                                         pdf_index, printed_label, unit_id)
+               VALUES (?,?,?,?,?,?,?,?)""",
             [
                 (
+                    run_id,
                     row.id,
                     i,
                     c.bundle_id,
@@ -138,7 +138,8 @@ def for_run(conn: sqlite3.Connection, run_id: str) -> list[Row]:
                 ),
             )
             for b in conn.execute(
-                "SELECT * FROM row_bullets WHERE row_id = ? ORDER BY ord", (r["id"],)
+                "SELECT * FROM row_bullets WHERE run_id = ? AND row_id = ? ORDER BY ord",
+                (run_id, r["id"]),
             )
         ]
         row.locators = [
@@ -149,17 +150,19 @@ def for_run(conn: sqlite3.Connection, run_id: str) -> list[Row]:
                 unit_id=lo["unit_id"],
             )
             for lo in conn.execute(
-                "SELECT * FROM row_locators WHERE row_id = ? ORDER BY ord", (r["id"],)
+                "SELECT * FROM row_locators WHERE run_id = ? AND row_id = ? ORDER BY ord",
+                (run_id, r["id"]),
             )
         ]
         out.append(row)
     return out
 
 
-def locator_labels(conn: sqlite3.Connection, row_id: str) -> list[dict]:
+def locator_labels(conn: sqlite3.Connection, run_id: str, row_id: str) -> list[dict]:
     return [
         dict(lo)
         for lo in conn.execute(
-            "SELECT * FROM row_locators WHERE row_id = ? ORDER BY ord", (row_id,)
+            "SELECT * FROM row_locators WHERE run_id = ? AND row_id = ? ORDER BY ord",
+            (run_id, row_id),
         )
     ]

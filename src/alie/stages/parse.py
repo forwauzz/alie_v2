@@ -12,14 +12,14 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-import pypdfium2 as pdfium
-
 from ..models import BlockType
+from ..parse import pdfium as pdfium_io
 from ..parse import register_default_tiers
 from ..provenance import Producer
 from ..seams import parser as parser_seam
 from ..seams.parser import PageInput
-from ..stores import audit, blobs, blocks as blocks_store, cases
+from ..stores import audit, blobs, cases
+from ..stores import blocks as blocks_store
 
 
 @dataclass(frozen=True)
@@ -46,11 +46,7 @@ def run(conn: sqlite3.Connection, bundle_id: str, *, run_id: str | None = None) 
     producer = Producer()
     pdf_path = blobs.path_for(bundle["content_hash"])
 
-    pdf = pdfium.PdfDocument(str(pdf_path))
-    try:
-        sizes = [pdf[i].get_size() for i in range(len(pdf))]
-    finally:
-        pdf.close()
+    sizes = pdfium_io.page_sizes(str(pdf_path))
 
     all_blocks = []
     page_rows = []

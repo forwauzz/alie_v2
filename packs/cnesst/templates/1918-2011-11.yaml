@@ -1,0 +1,23 @@
+# Template registry entry (PRD §4.3). Key: form id + revision.
+
+form: "1918"
+revision: "2011-11"
+doc_class: rapport_medical
+tag: KEY
+
+fields:
+  - id: consolidation
+    kind: checkbox
+    tag: KEY
+    anchor: "consolidation"
+    states:
+      oui: "\\[\\s*[xX✓]\\s*\\]\\s*Oui"
+      non: "\\[\\s*[xX✓]\\s*\\]\\s*Non"
+    blank_state: trop_tot
+    absent_state: absent
+
+  - id: diagnostic
+    kind: section
+    tag: KEY
+    under_heading: "diagnostic"
+    max_lines: 4

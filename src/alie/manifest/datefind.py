@@ -98,7 +98,7 @@ def find_in_text(
     *,
     block_id: str,
     pdf_index: int,
-    role_for: "RoleResolver",
+    role_for: RoleResolver,
     anchors: tuple[int, int] | None,
     today: date | None = None,
     confidence: float = 1.0,
@@ -132,7 +132,7 @@ def _fact(
     text: str,
     block_id: str,
     pdf_index: int,
-    role_for: "RoleResolver",
+    role_for: RoleResolver,
     confidence: float,
     century_inferred: bool,
 ) -> DateFact:

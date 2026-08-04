@@ -74,7 +74,9 @@ def configured_tasks() -> dict[str, str]:
     return {task: b.name for task, b in _BACKENDS.items()}
 
 
-def complete(prompt: str, task: str, *, legible: bool = True, max_tokens: int = 4096) -> ModelResponse:
+def complete(
+    prompt: str, task: str, *, legible: bool = True, max_tokens: int = 4096
+) -> ModelResponse:
     """The only way into a model. The legibility gate is enforced here so no caller can
     route around it."""
     if not legible:

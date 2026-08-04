@@ -11,15 +11,14 @@ the `parse.ocr` metric (§9.2).
 from __future__ import annotations
 
 from collections import Counter
-from pathlib import Path
 
-import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
 
 from ..models import BBox, Block, BlockSource, BlockType
 from ..provenance import hash_text
 from ..seams.parser import PageInput
 from . import blocktype, pagelabel
+from . import pdfium as pdfium_io
 
 #: Confidence assigned to text-layer reads. Extraction is exact; the discount below is a
 #: source-quality signal, not an extraction-fidelity one.
@@ -33,19 +32,10 @@ class TextLayerParser:
     tier = BlockSource.TEXT_LAYER
 
     def can_handle(self, page: PageInput) -> bool:
-        return page_char_count(Path(page.pdf_path), page.pdf_index) > 0
+        return pdfium_io.char_count(page.pdf_path, page.pdf_index) > 0
 
     def parse(self, page: PageInput) -> list[Block]:
         return parse_page(page)
-
-
-def page_char_count(pdf_path: Path, pdf_index: int) -> int:
-    pdf = pdfium.PdfDocument(str(pdf_path))
-    try:
-        textpage = pdf[pdf_index - 1].get_textpage()
-        return textpage.count_chars()
-    finally:
-        pdf.close()
 
 
 def _block_id(bundle_id: str, pdf_index: int, order: int, text: str) -> str:
@@ -74,23 +64,19 @@ def _size_for_rect(
 
 
 def parse_page(page: PageInput) -> list[Block]:
-    pdf = pdfium.PdfDocument(page.pdf_path)
-    try:
-        pdf_page = pdf[page.pdf_index - 1]
-        _, height = pdf_page.get_size()
-        textpage = pdf_page.get_textpage()
+    with pdfium_io.document(page.pdf_path) as pdf:
+        with pdfium_io.text_page(pdf, page.pdf_index) as (pdf_page, textpage):
+            _, height = pdf_page.get_size()
 
-        # count_rects() must be called with default params once before get_rect().
-        count = textpage.count_rects()
-        chars = _char_sizes(textpage)
-        raw: list[tuple[tuple[float, float, float, float], str, float]] = []
-        for i in range(count):
-            rect = textpage.get_rect(i)
-            text = textpage.get_text_bounded(*rect)
-            if text.strip():
-                raw.append((rect, text, _size_for_rect(rect, chars)))
-    finally:
-        pdf.close()
+            # count_rects() must be called with default params once before get_rect().
+            count = textpage.count_rects()
+            chars = _char_sizes(textpage)
+            raw: list[tuple[tuple[float, float, float, float], str, float]] = []
+            for i in range(count):
+                rect = textpage.get_rect(i)
+                text = textpage.get_text_bounded(*rect)
+                if text.strip():
+                    raw.append((rect, text, _size_for_rect(rect, chars)))
 
     if not raw:
         return []

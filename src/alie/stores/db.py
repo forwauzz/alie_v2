@@ -13,6 +13,9 @@ from ..config import SETTINGS, ensure_dirs
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
+#: How long a writer waits for a competing write before giving up.
+BUSY_TIMEOUT_MS = 10_000
+
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:16]}"
@@ -28,6 +31,9 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    # More than one worker may drain the job table at once. Without this, a concurrent
+    # writer fails immediately with "database is locked" instead of waiting its turn.
+    conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     return conn
 
 
@@ -45,7 +51,11 @@ def migrate(db_path: Path | None = None) -> None:
 def session(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
     conn = connect(db_path)
     try:
-        conn.execute("BEGIN")
+        # IMMEDIATE, not deferred. A deferred transaction that reads first and writes
+        # later gets SQLITE_BUSY *without* the busy handler running — SQLite refuses to
+        # block on a lock upgrade because that is how deadlocks happen. Taking the write
+        # lock up front means `busy_timeout` applies and concurrent writers queue.
+        conn.execute("BEGIN IMMEDIATE")
         yield conn
         conn.execute("COMMIT")
     except Exception:
