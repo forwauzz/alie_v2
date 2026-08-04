@@ -205,3 +205,62 @@ def test_an_unreadable_page_does_not_extend_the_document_before_it(pack):
     assert not signals[2].readable
     assert [2] in groups
     assert not any(len(g) > 1 and 2 in g for g in groups)
+
+
+def test_fax_transmission_change_is_a_document_boundary(pack):
+    """On scanned bundles the fax banner is often the only reliable boundary signal.
+    Headings arrive OCR damaged and the clinic masthead repeats on every sheet, but a
+    change of transmission is unambiguous (§10.1)."""
+    from alie.manifest.boundaries import group_pages, transmission_gaps
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    def page(idx, banner, body):
+        return [
+            Block(id=f"s{idx}", bundle_id="bun", pdf_index=idx, type=BlockType.STAMP,
+                  text=banner, bbox=BBox(0, 0, 400, 10), source=BlockSource.OCR,
+                  confidence=0.9, order=0),
+            Block(id=f"b{idx}", bundle_id="bun", pdf_index=idx, type=BlockType.PARAGRAPH,
+                  text=body, bbox=BBox(0, 40, 400, 52), source=BlockSource.OCR,
+                  confidence=0.9, order=1),
+        ]
+
+    body = "Clinique Médicale et suivi du travailleur en cours"
+    pages = {
+        1: page(1, "4/1/2025, 6:35 AM PDT TO: +1450 FROM: 1450 PAGE 4/15", body),
+        2: page(2, "4/1/2025, 6:35 AM PDT TO: +1450 FROM: 1450 PAGE 5/15", body),
+        # Same fax, but sheets 6 and 7 are not in the file.
+        3: page(3, "4/1/2025, 6:35 AM PDT TO: +1450 FROM: 1450 PAGE 8/15", body),
+        # A different transmission entirely.
+        4: page(4, "6/12/2025, 6:41 AM PDT TO: +1450 FROM: 1450 PAGE 6/27", body),
+    }
+    groups, signals = group_pages(pages, {i: 792.0 for i in pages}, pack)
+
+    assert [1, 2] in groups
+    assert [3] in groups
+    assert [4] in groups
+
+    gaps = transmission_gaps(signals)
+    assert len(gaps) == 1
+    assert gaps[0]["missing_sheets"] == 2
+    assert gaps[0]["after_pdf_page"] == 2
+
+
+def test_missing_sheets_are_only_claimed_within_one_transmission():
+    """A gap can only be asserted inside a single fax; two different faxes say nothing
+    about each other's completeness."""
+    from alie.parse.transmission import missing_pages, parse_banner
+
+    a = parse_banner("4/1/2025, 6:35 AM TO: x PAGE 7/15")
+    b = parse_banner("4/1/2025, 6:35 AM TO: x PAGE 10/15")
+    other = parse_banner("6/12/2025, 6:41 AM TO: x PAGE 2/27")
+
+    assert missing_pages(a, b) == 2
+    assert missing_pages(a, other) == 0
+    assert missing_pages(None, b) == 0
+
+
+def test_a_banner_without_a_page_count_is_not_a_transmission():
+    from alie.parse.transmission import parse_banner
+
+    assert parse_banner("Tél.: (579) 995-0789 Fax : (450) 500-0776") is None
+    assert parse_banner("PAGE 20/15") is None  # position beyond the total

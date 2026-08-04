@@ -34,6 +34,10 @@ class ManifestResult:
     illegible: int
     unclassified: int
     needs_fallback: int
+    #: Sheets absent from a fax transmission. Not a parse failure — a fact about the
+    #: bundle the firm was sent, and one a paralegal needs before certifying a chronology
+    #: as complete (§3.4).
+    missing_sheets: tuple[dict, ...] = ()
 
 
 def _unit_id(bundle_id: str, pages: list[int]) -> str:
@@ -65,6 +69,14 @@ def run(
         by_page.setdefault(b.pdf_index, []).append(b)
 
     groups, signals = boundaries.group_pages(by_page, heights, pack)
+
+    gaps = boundaries.transmission_gaps(signals)
+    if gaps:
+        audit.record(
+            conn, subject_type="bundle", subject_id=bundle_id, action="missing_sheets",
+            run_id=run_id, rule="transmission.sequence",
+            detail={"gaps": gaps, "total": sum(g["missing_sheets"] for g in gaps)},
+        )
 
     rejoined = 0
     if flags.get("manifest.orphan_rejoin"):
@@ -102,11 +114,17 @@ def run(
         illegible=counts["illegible"],
         unclassified=counts["unclassified"],
         needs_fallback=counts["fallback"],
+        missing_sheets=tuple(gaps),
     )
     audit.record(
         conn, subject_type="bundle", subject_id=bundle_id, action="manifest",
         run_id=run_id, rule="stage.manifest",
-        detail={k: getattr(result, k) for k in result.__dataclass_fields__ if k != "bundle_id"},
+        detail={
+            k: getattr(result, k)
+            for k in result.__dataclass_fields__
+            if k not in ("bundle_id", "missing_sheets")
+        }
+        | {"missing_sheets": len(result.missing_sheets)},
     )
     return result
 

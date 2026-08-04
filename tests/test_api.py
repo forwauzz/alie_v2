@@ -232,3 +232,20 @@ def test_audit_log_records_who_or_what_decided_each_thing(client):
     assert {"approve", "parse", "manifest", "manifest_unit", "render"} <= actions
     assert all(e["actor"] == "local" for e in entries)
     assert all(e["ts"] for e in entries)
+
+
+def test_intake_uses_the_default_flag_set_not_an_empty_one(client):
+    """An empty dict is not "the defaults". Intake once ran flagless, which turned
+    `parse.ocr` off, so the plan for a scanned bundle announced every unit illegible for a
+    file the pipeline reads fine. The plan is where a scoping error gets caught (§4.1), so
+    it has to describe the run the user is about to approve."""
+    from alie import flags
+
+    state = client.get("/dev/state").json()
+    case = next(c for c in state["cases"] if c["name"] == "hard")
+    intake = next(r for r in case["runs"] if r["stage_progress"])
+
+    run = client.get(f"/runs/{intake['id']}").json()
+    assert run["plan"].get("intake") is True
+    assert run["flags"] == flags.defaults()
+    assert run["flags"]["parse.ocr"] is True

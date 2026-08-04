@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from ..models import Block, BlockType
 from ..packs import Pack
 from ..parse.textquality import word_likeness
+from ..parse.transmission import Transmission, first_in, missing_pages
 
 #: A page starts a new unit at or above this score.
 START_THRESHOLD = 0.5
@@ -50,6 +51,9 @@ class PageSignals:
     #: False when the page's text layer is noise. An unreadable page cannot be known to
     #: continue the document before it.
     readable: bool = True
+    #: The fax transmission this page belongs to, when it carries a banner. On scanned
+    #: bundles this is often the only reliable boundary signal (§10.1).
+    transmission: Transmission | None = None
 
 
 def _class_heading_patterns(pack: Pack) -> list[re.Pattern[str]]:
@@ -97,6 +101,8 @@ def signals_for_page(
             pdf_index, True, 1.0, ("blank page",), None, None, None, None, True, readable=False
         )
 
+    transmission = first_in([b.text for b in blocks if b.type is BlockType.STAMP])
+
     score = 0.0
     reasons: list[str] = []
 
@@ -121,6 +127,10 @@ def signals_for_page(
             score -= 0.7
             reasons.append(f"printed label continues a document ({k} de {n})")
 
+    if transmission and transmission.opens:
+        score += 0.5
+        reasons.append(f"first sheet of transmission {transmission.key}")
+
     quality = word_likeness(" ".join(b.text for b in blocks))
     readable = quality >= READABLE_QUALITY
     if not readable:
@@ -137,6 +147,7 @@ def signals_for_page(
         author=_author(blocks),
         empty=False,
         readable=readable,
+        transmission=transmission,
     )
 
 
@@ -153,12 +164,35 @@ def group_pages(
     groups: list[list[int]] = []
     previous: int | None = None
     for idx in sorted(pages):
-        if not groups or signals[idx].starts or not _continues(signals, previous, idx):
+        if not groups or not _continues(signals, previous, idx) or signals[idx].starts:
             groups.append([idx])
         else:
             groups[-1].append(idx)
         previous = idx
     return groups, signals
+
+
+def transmission_gaps(signals: dict[int, PageSignals]) -> list[dict]:
+    """Sheets absent from the file, per transmission.
+
+    Not a parse failure — a fact about the bundle the firm was sent, and one a paralegal
+    needs before certifying a chronology as complete.
+    """
+    gaps = []
+    ordered = sorted(signals)
+    for previous, current in zip(ordered, ordered[1:], strict=False):
+        absent = missing_pages(signals[previous].transmission, signals[current].transmission)
+        if absent:
+            here = signals[current].transmission
+            gaps.append(
+                {
+                    "transmission": here.key if here else "",
+                    "after_pdf_page": previous,
+                    "missing_sheets": absent,
+                    "expected_total": here.total if here else 0,
+                }
+            )
+    return gaps
 
 
 def _continues(signals: dict[int, PageSignals], previous: int | None, idx: int) -> bool:
@@ -182,6 +216,12 @@ def _continues(signals: dict[int, PageSignals], previous: int | None, idx: int) 
         return False
     if not here.readable or not before.readable:
         return False
+
+    # A fax banner is decisive where it exists: a different transmission is a different
+    # document, and a gap in the page count means sheets are missing between these two.
+    if here.transmission or before.transmission:
+        return here.transmission is not None and here.transmission.follows(before.transmission)
+
     if here.label_position is None or before.label_position is None:
         return True  # no label evidence either way; fall back to physical adjacency
     return (

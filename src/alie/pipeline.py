@@ -39,12 +39,25 @@ def enqueue_case(conn: sqlite3.Connection, run_id: str, case_id: str) -> int:
 
 def intake_run(conn: sqlite3.Connection, case_id: str, bundle_id: str) -> str:
     """Parse starts immediately on upload — the user does not wait for approval to learn
-    what is in the file (§4.1)."""
+    what is in the file (§4.1).
+
+    Intake resolves the *default* flag set rather than running flagless. An empty dict is
+    not "the defaults": it turned `parse.ocr` off, so intake read none of a scanned bundle
+    and the plan announced 51 illegible units for a file the pipeline reads fine. The plan
+    is where a scoping error gets caught, so it has to describe the run the user is about
+    to approve.
+    """
+    from . import flags as flag_registry
+
     existing = next(
         (r for r in runs.runs_for_case(conn, case_id) if r["plan"].get(INTAKE)), None
     )
     run_id = existing["id"] if existing else runs.create_run(
-        conn, case_id=case_id, flags={}, pack_versions={}, plan={INTAKE: True},
+        conn,
+        case_id=case_id,
+        flags=flag_registry.defaults(),
+        pack_versions={},
+        plan={INTAKE: True},
     )
     runs.enqueue(conn, run_id, PARSE, {"bundle_id": bundle_id, "case_id": case_id})
     return run_id
@@ -69,7 +82,11 @@ def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
             runs.enqueue(
                 conn, run_id, STRUCTURED, {"unit_id": unit.id, "case_id": payload["case_id"]}
             )
-        return {"units": result.units, "rejoined": result.rejoined}
+        return {
+            "units": result.units,
+            "rejoined": result.rejoined,
+            "missing_sheets": sum(g["missing_sheets"] for g in result.missing_sheets),
+        }
 
     if stage == STRUCTURED:
         result = structured.run_unit(conn, payload["unit_id"], run_id=run_id)
