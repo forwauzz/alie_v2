@@ -194,3 +194,41 @@ def test_ocr_blocks_are_anchored_in_pdf_points_not_image_pixels(store):
         assert 0 <= block.bbox.y0 <= height + 1
         assert block.source.value == "ocr"
         assert block.attrs["engine"].startswith("tesseract-")
+
+
+# ----------------------------------------------------------------------------- packs
+
+
+def test_every_pack_pattern_compiles():
+    """Pack rules are data, and YAML double-quotes eat a lone backslash — `"\s"` arrives
+    as `s`. A pattern that fails to compile, or silently means something else, would show
+    up as a document that never classifies rather than as an error."""
+    import re
+
+    from alie.packs import available, load
+
+    for pack_id in available():
+        pack = load(pack_id)
+        for spec in pack.class_list:
+            for field in ("declares", "headings", "body"):
+                for pattern in spec.get(field, []):
+                    re.compile(pattern)
+                    assert "\s" in pattern or " " not in pattern.strip(), (
+                        f"{pack_id}/{spec['id']}/{field}: {pattern!r} has a literal space; "
+                        "OCR output is not reliably spaced"
+                    )
+        for role, cues in pack.date_roles.items():
+            for cue in cues.get("cues", []):
+                re.compile(cue), role
+
+
+def test_every_class_has_a_date_rule():
+    """A class with no entry in the date rule table falls to the `unknown` priority, which
+    silently gives it the wrong date rather than failing (§8.4)."""
+    from alie.packs import available, load
+
+    for pack_id in available():
+        pack = load(pack_id)
+        table = pack.date_rule_table
+        for spec in pack.class_list:
+            assert spec["id"] in table, f"{pack_id}: {spec['id']} has no date rule"

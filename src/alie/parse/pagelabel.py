@@ -19,19 +19,33 @@ BAND = 0.12
 
 _WS = r"[\s ]*"
 
+#: `p?age` rather than `page`: OCR drops the leading capital often enough that the
+#: reference bundle yields `age 1 de 2` and `age | de`. §4.4 asks these patterns to survive
+#: exactly that damage, and the cost of missing one is a citation rendering a pdf index
+#: because the real label was a glyph short.
+_PAGE_WORD = r"(?:p?age|p)\.?"
+
 #: Ordered by specificity. The first match wins and its `label` group is the printed label.
 PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "page_x_of_y",
         re.compile(
-            rf"^{_WS}(?:p(?:age)?\.?{_WS})?(?P<label>\d{{1,4}}){_WS}"
+            rf"^{_WS}(?:{_PAGE_WORD}{_WS})?(?P<label>\d{{1,4}}){_WS}"
             rf"(?:de|of|/|sur){_WS}\d{{1,4}}{_WS}$",
+            re.IGNORECASE,
+        ),
+    ),
+    # The total is often lost to the same damage: `age 1 de` with nothing following.
+    (
+        "page_x_of_truncated",
+        re.compile(
+            rf"^{_WS}{_PAGE_WORD}{_WS}(?P<label>\d{{1,4}}){_WS}(?:de|of|sur){_WS}$",
             re.IGNORECASE,
         ),
     ),
     (
         "page_n",
-        re.compile(rf"^{_WS}p(?:age)?\.{_WS}(?P<label>\d{{1,4}}){_WS}$", re.IGNORECASE),
+        re.compile(rf"^{_WS}{_PAGE_WORD}{_WS}(?P<label>\d{{1,4}}){_WS}$", re.IGNORECASE),
     ),
     # A bare number in the footer band is only a *candidate*. Real bundles put reference
     # numbers, birth years and dossier ids there too — the reference bundle yields `1937`,
@@ -42,7 +56,7 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 #: Rules whose match is self-evidencing: `p. 2 de 4` says what it is.
-TRUSTED_RULES = frozenset({"page_x_of_y", "page_n"})
+TRUSTED_RULES = frozenset({"page_x_of_y", "page_x_of_truncated", "page_n"})
 
 #: A four-digit number in this span is a year, not a page. Medico-legal footers carry
 #: birth years and claim years; the reference bundle prints `1937` on four separate pages.

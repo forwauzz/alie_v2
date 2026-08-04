@@ -46,6 +46,9 @@ classes:
   - id: rapport_imagerie
     label: Rapport d'imagerie
     tag: KEY
+    declares:
+      - "protocole\\s*clinique\\s*radiologique"
+      - "compte\\s*rendu\\s*radiologique"
     headings:
       - "rapport\\s*d.?\\s*imagerie"
       - "compte\\s*rendu\\s*radiologique"
@@ -89,9 +92,49 @@ classes:
       - "chirurgien"
     confidence: 0.9
 
+  # `declares` patterns are what the document calls itself on its own first page. EMR
+  # exports print `Note - Médecine de famille` above the body, which is a statement rather
+  # than an inference and therefore outranks heading and body scoring.
+  - id: note_medecine_famille
+    label: Note de médecine familiale
+    tag: KEY
+    declares:
+      - "note\\s*[-–—]\\s*m[ée]decine\\s*(?:de\\s*)?famille"
+    headings:
+      - "note\\s*[-–—]\\s*m[ée]decine\\s*(?:de\\s*)?famille"
+    confidence: 0.92
+
+  - id: note_travail_social
+    label: Note de travail social
+    tag: KEY
+    declares:
+      - "note\\s*[-–—]\\s*travail\\s*social"
+    headings:
+      - "note\\s*[-–—]\\s*travail\\s*social"
+      - "[ée]valuation\\s*du\\s*fonctionnement\\s*social"
+    confidence: 0.92
+
+  - id: note_soins_infirmiers
+    label: Note de soins infirmiers
+    tag: KEY
+    declares:
+      - "note\\s*[-–—]\\s*soins\\s*infirmiers"
+    headings:
+      - "note\\s*[-–—]\\s*soins\\s*infirmiers"
+    confidence: 0.92
+
+  - id: note_psychologie
+    label: Note de psychologie
+    tag: INF-H
+    declares:
+      - "note\\s*[-–—]\\s*(?:psychologie|psychoth[ée]rapie)"
+    confidence: 0.9
+
   - id: note_consultation
     label: Note de consultation
     tag: KEY
+    declares:
+      - "note\\s*[-–—]\\s*consultation"
     headings:
       - "note\\s*de\\s*consultation"
       - "note\\s*clinique"

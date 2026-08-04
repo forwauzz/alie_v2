@@ -29,6 +29,26 @@ def _search(patterns: list[str], text: str) -> list[str]:
     return [p for p in patterns if re.search(p, text, re.IGNORECASE)]
 
 
+def _declared(primary: list[Block], pack: Pack) -> Classification | None:
+    """A class the document names for itself on its first page.
+
+    Ranked above heading and body scoring because it is a statement rather than an
+    inference: the export wrote `Note - Travail social` at the top of the page.
+    """
+    text = "\n".join(b.text for b in primary)
+    for spec in pack.class_list:
+        hits = _search(spec.get("declares", []), text)
+        if hits:
+            return Classification(
+                spec["id"],
+                spec.get("declared_confidence", spec.get("confidence", 0.95)),
+                "declared",
+                tuple(hits),
+                needs_fallback=False,
+            )
+    return None
+
+
 def classify(blocks: list[Block], pack: Pack, *, serial: str | None = None) -> Classification:
     if not blocks:
         return Classification(pack.unknown_class, 0.0, "zones", (), needs_fallback=False)
@@ -41,7 +61,19 @@ def classify(blocks: list[Block], pack: Pack, *, serial: str | None = None) -> C
                     needs_fallback=False,
                 )
 
-    heading_text = "\n".join(b.text for b in blocks if b.type is BlockType.HEADING)
+    # A document's identity is declared at its top, so signals are read from the unit's
+    # first page. Searching the whole unit let a passing mention of `IRM` on page 4 of a
+    # five-page social-work note classify the whole thing as an imaging report, at 0.90.
+    first_page = min(b.pdf_index for b in blocks)
+    primary = [b for b in blocks if b.pdf_index == first_page]
+
+    # Many EMR exports state their own type — `Note - Médecine de famille`, `Note - Travail
+    # social`. That is stronger evidence than any keyword and is checked before scoring.
+    declared = _declared(primary, pack)
+    if declared:
+        return declared
+
+    heading_text = "\n".join(b.text for b in primary if b.type is BlockType.HEADING)
     body_text = "\n".join(b.text for b in blocks if b.is_body_text)
 
     best: Classification | None = None

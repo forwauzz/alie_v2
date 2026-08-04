@@ -163,3 +163,17 @@ def test_a_page_a_tier_read_and_found_nothing_still_counts_as_unread():
     )
     assert result.unparseable_ratio == 1 / 8
     assert "empty" in result.pages_by_tier
+
+
+def test_page_label_survives_a_dropped_leading_glyph():
+    """OCR loses the capital of `Page` often enough that the reference bundle yields
+    `age 1 de 2`. Missing it costs the page its label, and the citation then renders a pdf
+    index instead of what the sheet actually prints (§4.4, §8.1)."""
+    from alie.parse import pagelabel
+
+    assert pagelabel.match("age 1 de 2") == ("page_x_of_y", "1")
+    assert pagelabel.match("age 2 de") == ("page_x_of_truncated", "2")
+    assert pagelabel.match("Page 3 de 4") == ("page_x_of_y", "3")
+    # Still not a label just because the word appears.
+    assert pagelabel.match("age") is None
+    assert pagelabel.match("page de") is None

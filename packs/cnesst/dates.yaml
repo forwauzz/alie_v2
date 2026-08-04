@@ -112,6 +112,18 @@ rule_table:
   note_consultation:
     tag: KEY
     priority: [visit, exam, signature]
+  note_medecine_famille:
+    tag: KEY
+    priority: [visit, exam, signature, report]
+  note_travail_social:
+    tag: KEY
+    priority: [session, visit, signature, report]
+  note_soins_infirmiers:
+    tag: KEY
+    priority: [visit, session, signature, report]
+  note_psychologie:
+    tag: INF-H
+    priority: [session, visit, signature, report]
   note_evolution:
     tag: INF-H
     priority: [visit, session, exam, signature]
