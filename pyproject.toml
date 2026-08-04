@@ -24,6 +24,9 @@ dev = [
 eval = [
     "mlflow>=2.18",
 ]
+model = [
+    "anthropic>=0.69",
+]
 
 [project.scripts]
 alie = "alie.cli:main"

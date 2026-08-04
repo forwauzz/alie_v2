@@ -158,6 +158,14 @@ export function useCase(caseId: string) {
     [say, start],
   );
 
+  // Whether this run will call a model, resolved the same way the engine resolves it:
+  // the flag's default unless the case overrode it. The plan states this before the work
+  // starts, so "no model is called" is never a claim the settings quietly contradict.
+  const callsModel =
+    overrides["extract.model"] ??
+    (flagSpecs.find((f) => f.id === "extract.model")?.default as boolean | undefined) ??
+    false;
+
   return {
     plan,
     turns,
@@ -168,6 +176,7 @@ export function useCase(caseId: string) {
     invariants,
     overrides,
     setOverrides,
+    callsModel,
     busy,
     start,
     correct,

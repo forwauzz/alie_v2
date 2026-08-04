@@ -38,7 +38,17 @@ export function Note({ text, tone }: { text: string; tone?: "plain" | "error" })
 
 /** The plan is the manifest summary in readable form — the first moment a scoping error
  *  can be caught, before cost is spent (PRD §4.1). */
-export function PlanTurn({ plan, onRun, busy }: { plan: Plan; onRun: () => void; busy: boolean }) {
+export function PlanTurn({
+  plan,
+  onRun,
+  busy,
+  callsModel,
+}: {
+  plan: Plan;
+  onRun: () => void;
+  busy: boolean;
+  callsModel: boolean;
+}) {
   const flagged = Object.entries(plan.flagged).filter(([, n]) => n > 0);
   const classes = Object.entries(plan.units_by_class);
 
@@ -71,7 +81,15 @@ export function PlanTurn({ plan, onRun, busy }: { plan: Plan; onRun: () => void;
 
       <p className="sub">
         Régime {plan.pack.toUpperCase()} · pack v{plan.pack_version} · estimation ≈{" "}
-        {Math.max(1, Math.round(plan.estimate_seconds))} s. Aucun modèle n'est appelé.
+        {Math.max(1, Math.round(plan.estimate_seconds))} s.{" "}
+        {callsModel ? (
+          <span data-testid="model-notice">
+            Un modèle choisira les lignes à transcrire. Il ne rédige rien : il désigne des
+            passages, et le texte vient du document.
+          </span>
+        ) : (
+          <span data-testid="model-notice">Aucun modèle n'est appelé.</span>
+        )}
       </p>
 
       <div className="actions">

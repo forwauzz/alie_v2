@@ -65,6 +65,12 @@ REGISTER: tuple[Flag, ...] = (
     Flag("extract.structured_first", FlagKind.IMPLEMENTATION, True,
          "does 4a-before-4b actually reduce model work",
          "% fields resolved without the model; cost per unit"),
+    # 4b ships off: it is the only stage whose failure is silent, and it costs money per
+    # unit. It also degrades safely — with no model configured the tier is skipped and
+    # rows fall back to deterministic line selection (§14.2, §9.2).
+    Flag("extract.model", FlagKind.IMPLEMENTATION, False,
+         "do model-selected lines beat deterministic selection",
+         "field recall vs gold; groundedness (must be 100%); cost per unit"),
     Flag("dedupe.enabled", FlagKind.BEHAVIOUR, False,
          "how much duplication exists",
          "candidate pairs; verdict distribution; NOT row recall"),

@@ -90,6 +90,7 @@ export function App() {
                     key={turn.id}
                     plan={c.plan ?? turn.plan}
                     busy={c.busy}
+                    callsModel={c.callsModel}
                     onRun={() => void c.start("Produisez la chronologie.")}
                   />
                 );

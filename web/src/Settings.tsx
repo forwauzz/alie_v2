@@ -54,12 +54,17 @@ export function Settings({
                   <input
                     type="checkbox"
                     checked={value}
+                    // Named explicitly: the wrapping label's text is the id plus the
+                    // metric plus a badge, which computes to nothing useful. Eleven
+                    // switches all announced as "on" is not a register anyone can audit.
+                    aria-label={spec.id}
+                    aria-describedby={`metric-${spec.id}`}
                     onChange={(e) => onChange({ ...overrides, [spec.id]: e.target.checked })}
                   />
                   <span className="meta">
                     <code>{spec.id}</code>
                     {spec.requires_rerun && <span className="tag warn" style={{ marginLeft: 6 }}>relance</span>}
-                    <span className="metric">{spec.metric}</span>
+                    <span className="metric" id={`metric-${spec.id}`}>{spec.metric}</span>
                   </span>
                 </label>
               );

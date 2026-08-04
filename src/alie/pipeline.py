@@ -13,7 +13,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from .stages import assemble, manifest_build, parse, render, structured
+from .stages import assemble, extract, manifest_build, parse, render, structured
 from .stores import audit, cases, manifest, runs
 from .stores import rows as rows_store
 
@@ -90,7 +90,16 @@ def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
 
     if stage == STRUCTURED:
         result = structured.run_unit(conn, payload["unit_id"], run_id=run_id)
-        return {"template": result.template, "fields": result.fields_read}
+        detail = {"template": result.template, "fields": result.fields_read}
+        # 4a runs before 4b, and 4b fills only what remains (§4.2).
+        if flags.get("extract.model"):
+            extracted = extract.run_unit(conn, payload["unit_id"], run_id=run_id)
+            detail |= {
+                "extracted": extracted.kept,
+                "groundedness": extracted.groundedness,
+                "skipped": extracted.skipped,
+            }
+        return detail
 
     if stage == ASSEMBLE:
         result = assemble.run(conn, payload["case_id"], run_id=run_id)
