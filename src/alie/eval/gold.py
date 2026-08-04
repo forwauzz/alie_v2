@@ -30,6 +30,10 @@ class GoldUnit:
     row_date: str | None = None
     status: str | None = None
     excluded_by: str | None = None
+    #: Regime is a property of the unit, not the case (§6.1), so the gold states it per
+    #: unit and the harness scores it. Without this a flag that demonstrably re-tags a
+    #: document reads as "no metric moved".
+    regime: str | None = None
     cue_fields: dict[str, str] = field(default_factory=dict)
 
 
@@ -63,6 +67,7 @@ def _to_unit(raw: dict[str, Any]) -> GoldUnit:
         row_date=raw.get("row_date"),
         status=raw.get("status"),
         excluded_by=raw.get("excluded_by"),
+        regime=raw.get("regime"),
         cue_fields=raw.get("cue_fields", {}),
     )
 

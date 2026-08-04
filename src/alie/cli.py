@@ -166,6 +166,43 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_shadow(args: argparse.Namespace) -> int:
+    """Run a candidate beside the incumbent over the same golds (§9.1).
+
+    Reports the comparison. Promotion is a human decision and this command does not make
+    it — a candidate that scores better may still be changing what gets processed rather
+    than how well (§9.3).
+    """
+    import json
+
+    from . import eval as eval_kit
+    from .stores import db
+
+    db.migrate()
+    fixture_kit.build()
+
+    value = json.loads(args.value) if args.value else True
+    names = [args.gold] if args.gold else eval_kit.available()
+    unsafe = []
+    for name in names:
+        with db.session() as conn:
+            try:
+                shadow = eval_kit.compare_flag(
+                    conn, eval_kit.load(name), flag=args.flag, candidate=value
+                )
+            except eval_kit.NotOneVariable as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+        print(shadow.summary())
+        print()
+        if not shadow.safe:
+            unsafe.append(name)
+
+    if unsafe:
+        print(f"candidate breaks a must-hold on: {', '.join(unsafe)}", file=sys.stderr)
+    return 1 if unsafe else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="alie", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -189,6 +226,12 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--rejoin", action="store_true", help="enable manifest.orphan_rejoin")
     ev.add_argument("--group", help="MLflow run group tag shared by this sweep")
     ev.set_defaults(func=cmd_eval)
+
+    sh = sub.add_parser("shadow", help="run one flag change beside the baseline (§9.1)")
+    sh.add_argument("flag", help="the single flag to vary")
+    sh.add_argument("--value", help="candidate value as JSON (default: true)")
+    sh.add_argument("--gold", help="one gold id; omit to compare across every gold")
+    sh.set_defaults(func=cmd_shadow)
 
     args = parser.parse_args(argv)
     return args.func(args)

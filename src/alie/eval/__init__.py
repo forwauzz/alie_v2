@@ -7,5 +7,18 @@ recording surface; a prompt living in both would drift within a week (§11.1).
 from .gold import Gold, available, load
 from .harness import EvalReport, run
 from .scoring import Score, StageReport
+from .shadow import NotOneVariable, Shadow, compare, compare_flag
 
-__all__ = ["EvalReport", "Gold", "Score", "StageReport", "available", "load", "run"]
+__all__ = [
+    "EvalReport",
+    "Gold",
+    "NotOneVariable",
+    "Score",
+    "Shadow",
+    "StageReport",
+    "available",
+    "compare",
+    "compare_flag",
+    "load",
+    "run",
+]

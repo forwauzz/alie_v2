@@ -173,6 +173,22 @@ def _score_manifest(units, gold: Gold) -> StageReport:
         Score("date_within_3d", verdicts.count("exact") + verdicts.count("near"), len(dated))
     )
 
+    # Regime is a property of the unit (§6.1), so it is scored per unit.
+    regimes = [(w, u) for w, u, _o in pairs if u is not None and w.regime]
+    if regimes:
+        stage.scores.append(
+            Score(
+                "regime_agreement",
+                sum(1 for w, u in regimes if u.regime == w.regime),
+                len(regimes),
+            )
+        )
+        for want, unit in regimes:
+            if unit.regime != want.regime:
+                stage.failures.append(
+                    f"pages {list(want.pages)}: regime {unit.regime!r}, gold says {want.regime!r}"
+                )
+
     excluded = [(w, u) for w, u, _o in pairs if u is not None and w.excluded_by]
     if excluded:
         stage.scores.append(
