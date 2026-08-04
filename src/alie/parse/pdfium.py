@@ -21,6 +21,7 @@ _LOCK = threading.RLock()
 
 _page_sizes: dict[str, list[tuple[float, float]]] = {}
 _char_counts: dict[str, list[int]] = {}
+_page_text: dict[str, dict[int, str]] = {}
 
 
 @contextmanager
@@ -85,6 +86,34 @@ def char_counts(path: str) -> list[int]:
         return _char_counts[path]
 
 
+def page_text(path: str, pdf_index: int) -> str:
+    """The raw text layer for one page.
+
+    Routing needs this, not just a character count: a page can be dense with characters
+    that are not words, and that page belongs to OCR rather than the free tier.
+    """
+    with _LOCK:
+        cached = _page_text.setdefault(path, {})
+        if pdf_index not in cached:
+            with document(path) as pdf, text_page(pdf, pdf_index) as (_, textpage):
+                cached[pdf_index] = textpage.get_text_range()
+        return cached[pdf_index]
+
+
+def render_page(path: str, pdf_index: int, scale: float):
+    """Render one page to a PIL image for the OCR tier.
+
+    `scale` is relative to PDF user space at 72 dpi, so scale 3 is 216 dpi.
+    """
+    with _LOCK:
+        with document(path) as pdf:
+            page = pdf[pdf_index - 1]
+            try:
+                return page.render(scale=scale).to_pil()
+            finally:
+                page.close()
+
+
 def char_count(path: str, pdf_index: int) -> int:
     counts = char_counts(path)
     return counts[pdf_index - 1] if 1 <= pdf_index <= len(counts) else 0
@@ -94,3 +123,4 @@ def clear_cache() -> None:
     with _LOCK:
         _page_sizes.clear()
         _char_counts.clear()
+        _page_text.clear()

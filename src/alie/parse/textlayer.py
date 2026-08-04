@@ -19,11 +19,17 @@ from ..provenance import hash_text
 from ..seams.parser import PageInput
 from . import blocktype, pagelabel
 from . import pdfium as pdfium_io
+from .textquality import word_likeness
 
 #: Confidence assigned to text-layer reads. Extraction is exact; the discount below is a
 #: source-quality signal, not an extraction-fidelity one.
 BASE_CONFIDENCE = 1.0
 DEGENERATE_CONFIDENCE = 0.55
+
+#: Word-likeness a text layer must reach for this tier to claim the page. Matches the
+#: legibility gate's illegible threshold, so a page this tier accepts is one the manifest
+#: will not immediately mark unreadable.
+READABLE_QUALITY = 0.35
 
 
 class TextLayerParser:
@@ -32,7 +38,18 @@ class TextLayerParser:
     tier = BlockSource.TEXT_LAYER
 
     def can_handle(self, page: PageInput) -> bool:
-        return pdfium_io.char_count(page.pdf_path, page.pdf_index) > 0
+        """Claim a page only if the text layer is actually readable.
+
+        Presence is not enough. Real bundles arrive pre-OCR'd by whoever scanned them, and
+        that pass often failed while still emitting characters. Claiming those pages would
+        hand the manifest confident noise; declining them lets the OCR tier take the page,
+        or — when OCR is off — leaves it honestly counted as unparseable, which is the
+        `parse.ocr` metric (§9.2).
+        """
+        if pdfium_io.char_count(page.pdf_path, page.pdf_index) <= 0:
+            return False
+        text = pdfium_io.page_text(page.pdf_path, page.pdf_index)
+        return word_likeness(text) >= READABLE_QUALITY
 
     def parse(self, page: PageInput) -> list[Block]:
         return parse_page(page)

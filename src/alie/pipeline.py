@@ -59,7 +59,7 @@ def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
     stage, payload, run_id = job["stage"], job["payload"], job["run_id"]
 
     if stage == PARSE:
-        result = parse.run(conn, payload["bundle_id"], run_id=run_id)
+        result = parse.run(conn, payload["bundle_id"], flags=flags, run_id=run_id)
         runs.enqueue(conn, run_id, MANIFEST, payload)
         return {"blocks": result.blocks, "unparseable": len(result.unparseable_pages)}
 

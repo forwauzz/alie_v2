@@ -86,7 +86,7 @@ def test_run_records_its_resolved_flag_set(client):
     ).json()
 
     assert run["flags"]["manifest.orphan_rejoin"] is True
-    assert run["flags"]["parse.ocr"] is False  # defaults are captured, not just overrides
+    assert run["flags"]["parse.vision"] is False  # defaults captured, not just overrides
     assert run["pack_versions"]["cnesst"]
     assert "manifest.orphan_rejoin" in run["output_affecting_flags"]
 
@@ -211,11 +211,11 @@ def test_correction_targets_the_manifest_and_asks_for_a_rerun(client):
 
 def test_flag_register_is_exposed_with_its_metrics(client):
     body = client.get("/flags").json()
-    ocr = next(f for f in body["flags"] if f["id"] == "parse.ocr")
+    vision = next(f for f in body["flags"] if f["id"] == "parse.vision")
 
-    assert ocr["default"] is False
-    assert ocr["metric"] == "% pages queued as unparseable"
-    assert ocr["requires_rerun"] is True
+    assert vision["default"] is False
+    assert vision["metric"].startswith("% pages OCR queues")
+    assert vision["requires_rerun"] is True
     assert len(body["safety_invariants"]) == 3
 
 

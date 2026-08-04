@@ -57,7 +57,12 @@ def is_degenerate_number(text: str) -> bool:
 
 
 def infer(
-    text: str, *, font_size: float, body_size: float, is_upper_dense: bool
+    text: str,
+    *,
+    font_size: float,
+    body_size: float,
+    is_upper_dense: bool,
+    heading_ratio: float = HEADING_SIZE_RATIO,
 ) -> tuple[BlockType, dict[str, str]]:
     """Return the block type and any attributes the type carries."""
     stripped = text.strip()
@@ -78,7 +83,7 @@ def infer(
     if SIGNATURE.match(stripped):
         return BlockType.SIGNATURE, {}
 
-    larger = body_size > 0 and font_size >= body_size * HEADING_SIZE_RATIO
+    larger = body_size > 0 and font_size >= body_size * heading_ratio
     if (larger or is_upper_dense) and len(stripped) <= HEADING_MAX_CHARS:
         if body_size > 0 and font_size >= body_size * HEADING_L1_RATIO:
             level = "1"

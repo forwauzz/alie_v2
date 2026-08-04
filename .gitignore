@@ -42,3 +42,6 @@ web/tsconfig.tsbuildinfo
 
 # Build output
 web/dist/
+
+# OCR language models. Downloaded, not authored; 14 MB each.
+.tessdata/

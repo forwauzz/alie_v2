@@ -18,7 +18,10 @@ def test_every_flag_defines_the_metric_that_judges_it():
 def test_unproven_features_default_off_and_proven_ones_on():
     defaults = flags.defaults()
 
-    assert defaults["parse.ocr"] is False
+    # `parse.ocr` shipped off, was measured against the reference case, and its own metric
+    # turned it on: the free path could read 9% of report units, with OCR 81%. That is the
+    # register working as designed (§9.2), not a default drifting.
+    assert defaults["parse.ocr"] is True
     assert defaults["parse.vision"] is False
     assert defaults["dedupe.enabled"] is False
     assert defaults["manifest.orphan_rejoin"] is False
@@ -49,8 +52,11 @@ def test_model_and_prompt_flags_are_open_namespaces():
 
 def test_implementation_flags_carry_a_rerun_badge():
     """Behaviour flags are safe mid-case; implementation flags invalidate work (§9)."""
-    changed = flags.output_affecting(flags.resolve(run_flags={"parse.ocr": True}))
-    assert "parse.ocr" in changed
+    changed = flags.output_affecting(flags.resolve(run_flags={"parse.vision": True}))
+    assert "parse.vision" in changed
+
+    # Turning an implementation flag *off* also invalidates work.
+    assert "parse.ocr" in flags.output_affecting(flags.resolve(run_flags={"parse.ocr": False}))
 
     behaviour_only = flags.output_affecting(flags.resolve(run_flags={"render.doctype_code": True}))
     assert behaviour_only == []
@@ -112,3 +118,79 @@ def test_producer_keys_derived_artifacts_by_input_and_config():
 
     assert a != b and a != c and b != c
     assert derived_key("hash1", Producer(ocr="none")) == a
+
+
+# --------------------------------------------------------------------------- OCR tier
+
+
+def test_ocr_tier_is_only_registered_when_the_flag_and_the_binary_agree():
+    """With the binary missing, pages fall through to unparseable exactly as when the flag
+    was off — the flag must not promise a tier the machine cannot run."""
+    from alie.parse import register_tiers
+    from alie.parse.ocr import OcrConfig, available
+
+    assert register_tiers({"parse.ocr": False}) == ["text_layer"]
+    assert not available(OcrConfig(exe="", tessdata_dir=None, lang="fra", scale=3.0))
+
+
+def test_tsv_rows_become_line_blocks_with_boxes_and_confidence():
+    """Tesseract is called for its TSV, not its text: a string would throw away the word
+    boxes every citation anchors to (§4.3)."""
+    from alie.parse.ocr import _lines_from_tsv
+
+    header = (
+        "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num"
+        "\tleft\ttop\twidth\theight\tconf\ttext"
+    )
+    rows = [
+        header,
+        "5\t1\t1\t1\t1\t1\t10\t20\t40\t12\t92.0\tEntorse",
+        "5\t1\t1\t1\t1\t2\t55\t20\t50\t12\t88.0\tlombaire",
+        # A different line of the same paragraph.
+        "5\t1\t1\t1\t2\t1\t10\t40\t30\t12\t70.0\tsuivi",
+        # Below the confidence floor: speckle read as a character.
+        "5\t1\t1\t1\t3\t1\t10\t60\t8\t8\t4.0\t~",
+    ]
+    lines = _lines_from_tsv("\n".join(rows))
+
+    assert [text for text, _, _ in lines] == ["Entorse lombaire", "suivi"]
+    assert lines[0][1] == (10, 20, 105, 32)
+    assert abs(lines[0][2] - 0.90) < 1e-6
+
+
+def test_low_confidence_words_are_dropped_not_shipped():
+    from alie.parse.ocr import MIN_WORD_CONFIDENCE, _lines_from_tsv
+
+    header = (
+        "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num"
+        "\tleft\ttop\twidth\theight\tconf\ttext"
+    )
+    junk = f"5\t1\t1\t1\t1\t1\t0\t0\t5\t5\t{MIN_WORD_CONFIDENCE - 1}\t¬"
+    assert _lines_from_tsv(f"{header}\n{junk}") == []
+
+
+def test_ocr_blocks_are_anchored_in_pdf_points_not_image_pixels(store):
+    """A citation must mean the same thing whatever tier produced it, so the render scale
+    is divided back out (§4.3)."""
+    import pytest
+
+    from alie.devkit import fixtures
+    from alie.parse import ocr
+    from alie.seams.parser import PageInput
+
+    config = ocr.load_config()
+    if not ocr.available(config):
+        pytest.skip("tesseract not installed on this machine")
+
+    path = str(fixtures.fixture_path("tiny", "Medical.pdf"))
+    from alie.parse import pdfium as pdfium_io
+
+    width, height = pdfium_io.page_sizes(path)[0]
+    blocks = ocr.ocr_page(PageInput("bun", 1, path, width, height), config)
+
+    assert blocks
+    for block in blocks:
+        assert 0 <= block.bbox.x0 <= width + 1
+        assert 0 <= block.bbox.y0 <= height + 1
+        assert block.source.value == "ocr"
+        assert block.attrs["engine"].startswith("tesseract-")

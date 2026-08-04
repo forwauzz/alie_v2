@@ -42,9 +42,20 @@ class Flag:
 #: The §9.2 register. Every row states the question the flag answers and the metric that
 #: judges it, defined at the moment the flag is defined.
 REGISTER: tuple[Flag, ...] = (
-    Flag("parse.ocr", FlagKind.IMPLEMENTATION, False,
-         "how much of a real bundle the free path misses",
-         "% pages queued as unparseable"),
+    # Shipped off, measured, and turned on by its own metric — which is the whole point of
+    # the register (§9.2). On case 1 (312 pages, 12 bundles) the free path left 188 pages
+    # with no readable text and could read 9% of report units; with OCR that is 0 pages and
+    # 81%. It also collapsed 208 units to 54, because most of the 208 were single
+    # unreadable pages stranded as their own unit.
+    #
+    # Cost is real: 4.8 s to 226 s for the same 312 pages. That is a background job's
+    # problem, not a reason to hand the firm a chronology built on 9% of the file.
+    #
+    # Degrades safely: with no Tesseract on the machine the tier is not registered and
+    # pages fall through to unparseable, exactly as when the flag was off.
+    Flag("parse.ocr", FlagKind.IMPLEMENTATION, True,
+         "how much of a real bundle the free path misses — answered: 91% of units",
+         "% pages queued as unparseable; units the pipeline can read"),
     Flag("parse.vision", FlagKind.IMPLEMENTATION, False,
          "how much OCR still fails",
          "% pages OCR queues that vision resolves; block confidence delta"),

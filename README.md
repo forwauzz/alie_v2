@@ -3,9 +3,9 @@
 Medico-legal document understanding for Quebec compensation regimes.
 [ALIE-PRD.md](ALIE-PRD.md) is the source of truth for architecture; this file is how to run it.
 
-**Status: Phase 1 — the deterministic floor.** Text-layer parse, manifest, template
-registry, assemble, render, review and export, with the CNESST pack. No model has run.
-See [What is not built](#what-is-not-built).
+**Status: Phase 1 — the deterministic floor, plus OCR.** Text-layer parse, OCR, manifest,
+template registry, assemble, render, review and export, with the CNESST pack. No language
+model has run. See [What is not built](#what-is-not-built).
 
 ---
 
@@ -17,6 +17,21 @@ same ones.
 ```bash
 uv venv && uv pip install -e ".[dev]" && npm --prefix web install
 ```
+
+### OCR
+
+`parse.ocr` is on by default and needs Tesseract plus the French model. Both are found
+automatically — the binary from `PATH` or the standard install location, the model from
+`.tessdata/` in the repo. With neither present the tier simply is not registered and pages
+fall through to unparseable, exactly as when the flag was off.
+
+```bash
+curl -L -o .tessdata/fra.traineddata https://github.com/tesseract-ocr/tessdata/raw/main/fra.traineddata
+```
+
+Tesseract itself is a system install (`winget install UB-Mannheim.TesseractOCR`, `brew
+install tesseract`, `apt install tesseract-ocr`). Overrides, if the defaults don't find
+them: `ALIE_TESSERACT_EXE`, `ALIE_TESSDATA_DIR`, `ALIE_OCR_LANG`, `ALIE_OCR_SCALE`.
 
 Start the API (fixed port 8471, idempotent, fails loudly if something else holds the port):
 
@@ -90,6 +105,29 @@ rather than a pivot. No model ran to produce any of this.
 Turning the flag off is the flag's own metric (§9.2): 7 units instead of 6, and the orphan
 page becomes a spurious undated row.
 
+### What the real case measured
+
+Case 1 is 12 bundles, 312 pages, real scans. This is the number §14 says Phase 1 exists to
+produce, and the reason `parse.ocr` is now on by default:
+
+| | OCR off | OCR on |
+|---|---|---|
+| pages with no readable text | 188 | 0 |
+| report units | 208 | 54 |
+| units the pipeline can read | 19 (9%) | 44 (81%) |
+| pages with a printed label | 56 | 84 |
+| seconds for 312 pages | 4.8 | 226 |
+
+The unit count falling from 208 to 54 is not a regression: most of the 208 were single
+unreadable pages stranded as their own unit. 54 units across 312 pages is a plausible case.
+
+Two things this exposed that synthetic fixtures could not. These bundles arrive *already*
+OCR'd by whoever scanned them, and that pass often failed while still emitting characters
+— so a legibility gate that counts characters calls noise legible and would feed it
+straight to a model. And the footers carry reference numbers and birth years, so a bare
+number is not a page label: `1937` appears on four pages of one bundle, and
+`printed_label` is what *renders* into a citation.
+
 ---
 
 ## What is not built
@@ -97,8 +135,8 @@ page becomes a spurious undated row.
 Honest scope, not a roadmap gloss.
 
 **Phase 2+, per §14.** The eval harness and MLflow (`make eval` fails loudly rather than
-exiting 0 on nothing). Delta runs. The OCR and vision parse tiers — the seam routes to
-them and the flags exist, but only the text-layer tier is implemented. The seven-axis
+exiting 0 on nothing). Delta runs. The vision escalation tier — the seam routes to it and
+`parse.vision` exists, but only text-layer and OCR are implemented. The seven-axis
 duplicate view and clean-PDF export. SAAQ and IVAC packs. The health narrative composer.
 
 **Stage 4b.** No model is configured. `seams/model.py` fails loudly rather than returning

@@ -149,3 +149,17 @@ def test_explicit_labels_are_never_second_guessed():
 
     labels = {1: ("page_x_of_y", "1937"), 2: ("page_n", "780")}
     assert pagelabel.confirm_bare_labels(labels) == {1: "1937", 2: "780"}
+
+
+def test_a_page_a_tier_read_and_found_nothing_still_counts_as_unread():
+    """`unparseable` drives the `parse.ocr` metric (§9.2). A page OCR ran on and found
+    nothing is just as unread as one no tier claimed, and counting only the second would
+    report 0% missed for a bundle the pipeline cannot read."""
+    from alie.stages.parse import ParseResult
+
+    result = ParseResult(
+        bundle_id="bun", pages=8, blocks=37, unparseable_pages=(8,),
+        pages_with_printed_label=6, pages_by_tier={"text_layer": 7, "empty": 1},
+    )
+    assert result.unparseable_ratio == 1 / 8
+    assert "empty" in result.pages_by_tier
