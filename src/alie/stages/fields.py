@@ -126,9 +126,28 @@ def _absent(unit: ReportUnit, spec: dict) -> Record:
 MIN_STATEMENT_WORDS = 7
 
 
+#: Text that tells the reader what to do rather than saying what happened. A form caption
+#: is grammatical and long enough to pass a word count — `Atteinte permanente à l'intégrité
+#: physique ou psychique CONSOLIDATION (Inscrire la date)` did — so it has to be excluded
+#: on what it is, not on its shape.
+FORM_INSTRUCTION = re.compile(
+    r"\(?\b(inscrire|cocher|indiquer|remplir|veuillez|joindre)\b"
+    r"|\bsi\s+(?:la\s+r[ée]ponse|oui|non)\b"
+    # A form asks; a finding states. `Si oui, ces limitations ont-elles aggravé…` is the
+    # question printed above the blank, not the clinician's answer.
+    r"|\b\w+-(?:elles?|ils?|vous|on)\b"
+    r"|\b[àa]\s+l.usage\s+d[eu]\b"
+    r"|\bformulaire\s+transmis\b"
+    r"|\bn[°o]\s*de\s*r[ée]f[ée]rence\b",
+    re.IGNORECASE,
+)
+
+
 def _looks_like_a_statement(sentence: str) -> bool:
     words = re.findall(r"\w+", sentence)
     if len(words) < MIN_STATEMENT_WORDS:
+        return False
+    if FORM_INSTRUCTION.search(sentence):
         return False
     # Blank form captions arrive as ALL CAPS on scanned CNESST sheets.
     letters = [c for c in sentence if c.isalpha()]
@@ -213,13 +232,31 @@ def _read_trajectory(
     unit: ReportUnit, blocks: list[Block], spec: dict, furniture: frozenset[str]
 ) -> list[Record]:
     """Free text **plus** a derived enum, as two records (§8.6)."""
-    hit = _first_hit(blocks, spec.get("cues", []), furniture=furniture, require_statement=True)
+    # The enum patterns are the cues when the pack says so. A trajectory the engine cannot
+    # classify is not a trajectory statement — it is a form title or an instruction that
+    # happens to contain the word (§4.2).
+    cues = list(spec.get("cues", []))
+    if spec.get("cues_from_enum"):
+        cues = [p for patterns in (spec.get("enum") or {}).values() for p in patterns]
+
+    hit = _first_hit(blocks, cues, furniture=furniture, require_statement=True)
     if hit is None:
         return [_absent(unit, spec)]
 
     block, match = hit
     start, end = _sentence_around(block.text, match.start())
     sentence = block.text[start:end]
+
+    # An unfilled option row lists every answer at once: `Progrès du patient : o Aucun
+    # O Régression $ Amélioration minimale o Amélioration importante O Plateau`. Matching
+    # two mutually exclusive categories means this is the menu, not the choice.
+    hit_categories = [
+        value
+        for value, patterns in (spec.get("enum") or {}).items()
+        if any(re.search(p, sentence, re.IGNORECASE) for p in patterns)
+    ]
+    if len(hit_categories) > 1:
+        return [_absent(unit, spec)]
 
     records = [
         _record(unit, spec, sentence.strip(), block, (start, end), confidence=block.confidence)

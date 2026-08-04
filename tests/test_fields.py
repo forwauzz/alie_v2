@@ -56,6 +56,91 @@ def test_the_confounder_clause_is_captured(store):
     assert got["confounder"].is_cited
 
 
+def _prose(text: str):
+    """One paragraph block, as the cue readers see it."""
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    return [
+        Block(
+            id="blk_1", bundle_id="b", pdf_index=1, order=0, text=text,
+            type=BlockType.PARAGRAPH, bbox=BBox(0, 0, 400, 12),
+            source=BlockSource.OCR, confidence=0.9,
+        )
+    ]
+
+
+def _trajectory_of(text: str, pack):
+    from alie.models import Legibility, UnitKind
+    from alie.models.unit import ReportUnit
+    from alie.stages import fields as fs
+
+    unit = ReportUnit(
+        id="u", bundle_id="b", case_id="c", pages=(1,), doc_class="rapport_medical",
+        class_confidence=1.0, class_source="zones", regime="cnesst",
+        legibility=Legibility.LEGIBLE, kind=UnitKind.PRIMARY,
+    )
+    got = {r.field: r.value for r in fs.read_fields(unit, _prose(text), pack, {})}
+    return got.get("trajectory")
+
+
+def test_a_form_title_is_not_a_trajectory_statement(store, pack):
+    """Measured on case 1: the bare noun `évolution` matched form titles, instructions to
+    the physician, and blank checkbox rows — 21 reads, 20 unclassifiable. If the engine
+    cannot say which way the patient is going, it is not looking at a trajectory."""
+    assert _trajectory_of(
+        "À l'usage de la Nº de référence Formulaire transmis électroniquement à la CNESST "
+        "le Sommaire de prise en charge et d'évolution",
+        pack,
+    ) == "absent"
+
+
+def test_an_instruction_to_the_physician_is_not_a_finding(store, pack):
+    assert _trajectory_of(
+        "Si la réponse est dictée, le médecin consultant doit consigner, dans les notes "
+        "d'évolution, son opinion et ses recommandations.",
+        pack,
+    ) == "absent"
+
+
+def test_an_unfilled_checkbox_row_is_the_menu_not_the_choice(store, pack):
+    """`Progrès du patient : o Aucun O Régression $ Amélioration minimale o Amélioration
+    importante O Plateau` lists every answer at once. Matching two mutually exclusive
+    categories means this is the menu."""
+    assert _trajectory_of(
+        "Progrès du patient : o Aucun O Régression $ Amélioration minimale "
+        "o Amélioration importante O Plateau O Guérison o Détérioration",
+        pack,
+    ) == "absent"
+
+
+def test_a_real_trajectory_statement_still_reads(store, pack):
+    """The guards must not cost the finding they exist to protect."""
+    got = _trajectory_of(
+        "On note une amélioration marquée de la mobilité lombaire depuis la dernière "
+        "évaluation du travailleur.",
+        pack,
+    )
+
+    assert got is not None and got != "absent"
+    assert "amélioration marquée" in got
+
+
+def test_a_form_caption_is_not_an_unrated_sequela(store, pack):
+    """`Atteinte permanente à l'intégrité physique ou psychique CONSOLIDATION (Inscrire la
+    date)` is grammatical and long enough to pass a word count. It has to be excluded on
+    what it is, not on its shape."""
+    from alie.stages import fields as fs
+
+    assert not fs._looks_like_a_statement(
+        "Atteinte permanente à l'intégrité physique ou psychique CONSOLIDATION "
+        "(Inscrire la date)"
+    )
+    assert fs._looks_like_a_statement(
+        "Les limitations fonctionnelles sont de classe 3 (IRSST) pour la colonne "
+        "lombo-sacrée."
+    )
+
+
 def test_a_sentence_running_past_its_block_is_carried_to_the_end(store):
     """"confounded by a personal condition" without "of multi-level spondylarthrosis" says
     the finding is confounded without saying by what — a different claim from the one the

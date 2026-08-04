@@ -88,8 +88,9 @@ def to_markdown(conn: sqlite3.Connection, case_id: str, rows: list[Row]) -> str:
         "Date", "Document", "Contenu",
     ]
 
-    undated = [r for r in rows if r.is_undated]
-    dated = [r for r in rows if not r.is_undated]
+    kept = [r for r in rows if not r.excluded_by]
+    undated = [r for r in kept if r.is_undated]
+    dated = [r for r in kept if not r.is_undated]
 
     out: list[str] = []
     if undated:
@@ -102,7 +103,37 @@ def to_markdown(conn: sqlite3.Connection, case_id: str, rows: list[Row]) -> str:
     out.append("|" + "|".join(["---"] * len(headers)) + "|")
     for row in undated + dated:
         out.append(_row_markdown(row, pack, folders))
+
+    out.extend(_removal_manifest(rows, pack, folders))
     return "\n".join(out) + "\n"
+
+
+def _removal_manifest(rows: list[Row], pack: Pack, folders: dict[str, str]) -> list[str]:
+    """What was held back and why.
+
+    A deduplicated export must be reversible and carry a manifest of what was removed and
+    why. Removing pages from a legal record is never a destructive operation on the source
+    (§10.1) — the rows are still in the run, and this names each one and its reason so the
+    firm can put any of them back.
+    """
+    held = [r for r in rows if r.excluded_by]
+    if not held:
+        return []
+
+    heading = pack.output.get("rows", {}).get(
+        "removed_heading", "RETIRÉ PAR RÈGLE — {n} document(s), conservés au dossier"
+    )
+    out = [
+        "",
+        f"**{heading.format(n=len(held))}**",
+        "",
+        "| Date | Document | Règle |",
+        "|---|---|---|",
+    ]
+    for row in held:
+        when = row.row_date.value.isoformat() if row.row_date.value else "—"
+        out.append(f"| {when} | {row.title} | `{row.excluded_by}` |")
+    return out
 
 
 def _row_markdown(row: Row, pack: Pack, folders: dict[str, str]) -> str:

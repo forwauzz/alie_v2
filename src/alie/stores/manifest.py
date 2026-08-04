@@ -181,6 +181,12 @@ def get_unit(conn: sqlite3.Connection, unit_id: str) -> ReportUnit | None:
     return _hydrate(conn, _to_unit(r)) if r else None
 
 
+def set_excluded(conn: sqlite3.Connection, unit_id: str, rule: str) -> None:
+    """Mark a unit held back by a rule. A status, not a deletion — the unit, its pages and
+    every citation into it stay exactly where they were (§3.4, §10.1)."""
+    conn.execute("UPDATE units SET excluded_by = ? WHERE id = ?", (rule, unit_id))
+
+
 def delete_units_for_bundle(conn: sqlite3.Connection, bundle_id: str) -> None:
     ids = [r["id"] for r in conn.execute("SELECT id FROM units WHERE bundle_id = ?", (bundle_id,))]
     for uid in ids:

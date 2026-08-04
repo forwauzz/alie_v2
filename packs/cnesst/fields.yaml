@@ -15,24 +15,35 @@ fields:
   - id: trajectory
     kind: free_text_with_enum
     tag: INF-H
-    cues:
-      - "\\b[ée]volution\\b"
-      - "\\bam[ée]lioration\\b"
-      - "\\bd[ée]t[ée]rioration\\b"
-      - "\\bstatu\\s*quo\\b"
+    # No `cues` of its own: the enum patterns *are* the cues. Measured on case 1, the bare
+    # noun `évolution` matched form titles (`Sommaire de prise en charge et d'évolution`),
+    # instructions to the physician (`consigner, dans les notes d'évolution`) and blank
+    # checkbox rows — 21 reads, 20 of them unclassifiable.
+    #
+    # If the engine cannot say which way the patient is going, it is not looking at a
+    # trajectory statement. Distinguishing "the patient improved" from "tick here if the
+    # patient improved" is judgement, and judgement is 4b's tier, not 4a's (§4.2).
+    cues_from_enum: true
     enum:
+      # The vocabulary has to be complete, not just representative. `Progrès du patient :
+      # o Aucun O Régression $ Amélioration minimale o Plateau O Guérison` is a blank
+      # option row, and it only reads as one if the engine recognises *every* option in
+      # it — a menu with one known word looks exactly like a statement.
       amelioration:
         - "\\bam[ée]lior"
         - "\\bprogr[èe]s\\b"
         - "\\ben\\s*voie\\s*de\\s*r[ée]solution\\b"
+        - "\\bgu[ée]rison\\b"
       deterioration:
         - "\\bd[ée]t[ée]rior"
         - "\\baggrav"
         - "\\bempire\\b"
+        - "\\br[ée]gression\\b"
       stable:
         - "\\bstatu\\s*quo\\b"
         - "\\bstationnaire\\b"
         - "\\binchang[ée]"
+        - "\\bplateau\\b"
 
   # "improved, but confounded by X"; "disabled, but by a different cause" (§8.6). The
   # clause that makes a favourable finding arguable is the one most worth citing.

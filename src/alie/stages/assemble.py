@@ -83,12 +83,24 @@ def run(conn: sqlite3.Connection, case_id: str, *, run_id: str | None = None) ->
     }
     toggles = pack.toggles()
 
-    included = [u for u in units if u.excluded_by is None and toggles.get(u.doc_class, True)]
-    excluded = len(units) - len(included)
+    # Excluded units still become rows. Nothing is dropped: the row carries `excluded_by`,
+    # stays out of the chronology table, and appears in the export's removal manifest so
+    # the firm can see what was held back and put any of it back (§3.4, §10.1).
+    def held_back(unit: ReportUnit) -> str | None:
+        if unit.excluded_by:
+            return unit.excluded_by
+        if not toggles.get(unit.doc_class, True):
+            return f"toggle.{unit.doc_class}"
+        return None
+
+    excluded = sum(1 for u in units if held_back(u))
 
     buckets: dict[tuple, list[ReportUnit]] = {}
-    for unit in included:
-        buckets.setdefault(_bucket_key(unit, pack), []).append(unit)
+    for unit in units:
+        # An excluded unit never merges into a kept encounter; it would drag its bullets
+        # into a row the firm is told was not removed.
+        key = ("held", unit.id) if held_back(unit) else _bucket_key(unit, pack)
+        buckets.setdefault(key, []).append(unit)
 
     # The claim-event dimension, derived from the event-role dates the manifest already
     # holds (§8.6). Computed once for the case: attribution needs every event date in the
@@ -100,7 +112,10 @@ def run(conn: sqlite3.Connection, case_id: str, *, run_id: str | None = None) ->
     for group in buckets.values():
         row = _build_row(conn, case_id, group, pack, labels)
         _attribute_claim(row, group, attributions)
+        row.excluded_by = held_back(group[0])
         rows.append(row)
+        if row.excluded_by:
+            continue
         if len(group) > 1:
             merged += 1
             if len({u.bundle_id for u in group}) > 1:

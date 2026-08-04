@@ -13,6 +13,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from .manifest import dedupe
 from .stages import assemble, extract, manifest_build, parse, render, structured
 from .stages import fields as fields_stage
 from .stores import audit, cases, manifest, runs
@@ -70,6 +71,43 @@ def is_intake(conn: sqlite3.Connection, run_id: str) -> bool:
     return bool(run and run["plan"].get(INTAKE))
 
 
+def _dedupe(
+    conn: sqlite3.Connection, case_id: str, flags: dict[str, Any], run_id: str | None
+) -> dict:
+    """Duplicate detection over the manifest (§10.1).
+
+    `dedupe.enabled` only *reports* — its metric is candidate pairs and verdict
+    distribution, explicitly **not** row recall (§9.2), because the point of the first run
+    is to learn how much duplication exists. Removal needs the second flag, and even then
+    only `identical` pairs, which is a safety invariant rather than a preference (§9).
+    """
+    if not flags.get("dedupe.enabled"):
+        return {}
+
+    comparisons = dedupe.candidates(conn, case_id)
+    verdicts: dict[str, int] = {}
+    for c in comparisons:
+        verdicts[str(c.verdict)] = verdicts.get(str(c.verdict), 0) + 1
+
+    removed = 0
+    if flags.get("dedupe.auto_remove_identical"):
+        for unit_id, duplicate_of in dedupe.removable(comparisons).items():
+            manifest.set_excluded(conn, unit_id, f"dedupe.identical_to:{duplicate_of}")
+            removed += 1
+
+    audit.record(
+        conn, subject_type="case", subject_id=case_id, action="dedupe", run_id=run_id,
+        rule="stage.dedupe",
+        detail={
+            "candidates": len(comparisons),
+            "verdicts": verdicts,
+            "removed": removed,
+            "axes": list(dedupe.AXES),
+        },
+    )
+    return {"dupe_candidates": len(comparisons), "dupes_removed": removed}
+
+
 def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
     stage, payload, run_id = job["stage"], job["payload"], job["run_id"]
 
@@ -122,10 +160,11 @@ def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
         return detail
 
     if stage == ASSEMBLE:
+        detail = _dedupe(conn, payload["case_id"], flags, run_id)
         result = assemble.run(conn, payload["case_id"], run_id=run_id)
         rows_store.replace_for_run(conn, run_id, result.rows)
         runs.enqueue(conn, run_id, RENDER, payload)
-        return {
+        return detail | {
             "rows": len(result.rows),
             "merged": result.merged_encounters,
             "unions": result.cross_bundle_unions,

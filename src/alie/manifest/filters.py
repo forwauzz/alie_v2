@@ -62,11 +62,16 @@ Predicate = Callable[[UnitFacts], bool]
 #: Conditions named by packs whose supporting feature is not built. Listed explicitly so
 #: the gap is visible in code review rather than discovered when a filter never fires.
 PENDING: dict[str, str] = {
-    # Fires only on the `identical` verdict — all seven axes matching (§10.1).
-    "unit_has_identical_duplicate_already_included": "dedupe (§10.1) is not built",
+    # Fires only on the `identical` verdict — all seven axes matching. Evaluated by the
+    # dedupe pass at assemble time, which is the only point where every unit in the case
+    # exists to be compared against; a per-unit predicate cannot see the other units
+    # (§10.1).
+    "unit_has_identical_duplicate_already_included": (
+        "evaluated by the dedupe pass, which needs the whole case (§10.1)"
+    ),
     # Needs the claim-event dimension: 1990 / 2011 / 2022 coexist in one file (§8.6).
     "unit_date_precedes_earliest_claim_event_and_no_rra_reference": (
-        "the claim-event dimension (§8.6) is not built"
+        "the claim-event dimension is case-wide; evaluated after the manifest (§8.6)"
     ),
 }
 
