@@ -134,6 +134,38 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0 if run["status"] == runs.DONE else 1
 
 
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Score golds end to end (§11). Exit non-zero when a must-hold metric does not hold —
+    groundedness, uncited, coverage and truncation are release-blocking, not diagnostic."""
+    from . import eval as eval_kit
+    from .eval import mlflow_sink
+    from .stores import db
+
+    db.migrate()
+    fixture_kit.build()
+
+    names = [args.gold] if args.gold else eval_kit.available()
+    if not names:
+        print("no golds found; run `alie fixtures` first", file=sys.stderr)
+        return 1
+
+    flags = {"manifest.orphan_rejoin": True} if args.rejoin else {}
+    group = args.group or f"eval-{len(names)}-golds"
+    failed = []
+    for name in names:
+        with db.session() as conn:
+            report = eval_kit.run(conn, eval_kit.load(name), flags=flags)
+        print(report.summary())
+        print()
+        mlflow_sink.log(report, run_group=group)
+        if not report.holds:
+            failed.append(name)
+
+    if failed:
+        print(f"must-hold metrics failed: {', '.join(failed)}", file=sys.stderr)
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="alie", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -151,6 +183,12 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--pack", default="cnesst")
     run.add_argument("--rejoin", action="store_true", help="enable manifest.orphan_rejoin")
     run.set_defaults(func=cmd_run)
+
+    ev = sub.add_parser("eval", help="score golds end to end and log to MLflow (§11)")
+    ev.add_argument("gold", nargs="?", help="one gold id; omit to score every gold")
+    ev.add_argument("--rejoin", action="store_true", help="enable manifest.orphan_rejoin")
+    ev.add_argument("--group", help="MLflow run group tag shared by this sweep")
+    ev.set_defaults(func=cmd_eval)
 
     args = parser.parse_args(argv)
     return args.func(args)

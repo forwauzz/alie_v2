@@ -79,16 +79,17 @@ def read_fields(
     unit: ReportUnit, blocks: list[Block], pack: Pack, prior: dict[str, Record]
 ) -> list[Record]:
     out: list[Record] = []
+    furniture = _furniture(blocks)
     for spec in pack.cue_fields:
         kind = spec.get("kind")
         if kind == "free_text_with_enum":
-            out.extend(_read_trajectory(unit, blocks, spec))
+            out.extend(_read_trajectory(unit, blocks, spec, furniture))
         elif kind == "cue_span":
-            out.extend(_read_cue_span(unit, blocks, spec))
+            out.extend(_read_cue_span(unit, blocks, spec, furniture))
         elif kind == "classify":
-            out.extend(_read_classify(unit, blocks, spec, pack))
+            out.extend(_read_classify(unit, blocks, spec, pack, furniture))
         elif kind == "derived_claimed_sequelae":
-            out.extend(_read_claimed_but_unrated(unit, blocks, spec, prior))
+            out.extend(_read_claimed_but_unrated(unit, blocks, spec, prior, furniture))
     return out
 
 
@@ -118,20 +119,63 @@ def _absent(unit: ReportUnit, spec: dict) -> Record:
     return _record(unit, spec, "absent", None, None, derived=True)
 
 
-def _first_hit(blocks: list[Block], patterns: list[str]) -> tuple[Block, re.Match] | None:
+#: A statement needs this many words. Measured on case 1: the cues matched CNESST form
+#: *field labels* far more often than clinical statements — `Sommaire de prise en charge et
+#: d'évolution` is a form title, `Code de séquelle` is a field caption. A label names a
+#: topic; a finding asserts something about it, and asserting takes words.
+MIN_STATEMENT_WORDS = 7
+
+
+def _looks_like_a_statement(sentence: str) -> bool:
+    words = re.findall(r"\w+", sentence)
+    if len(words) < MIN_STATEMENT_WORDS:
+        return False
+    # Blank form captions arrive as ALL CAPS on scanned CNESST sheets.
+    letters = [c for c in sentence if c.isalpha()]
+    return not (letters and sum(c.isupper() for c in letters) / len(letters) > 0.8)
+
+
+def _first_hit(
+    blocks: list[Block], patterns: list[str], *, furniture: frozenset[str] = frozenset(),
+    require_statement: bool = False,
+) -> tuple[Block, re.Match] | None:
     """First cue hit in prose.
 
     Headings are skipped. `## ÉVOLUTION` is a section title, not a trajectory statement,
     and storing it as the paralegal's wording would cite a word she never wrote as the
     finding. The sentence under the heading is the finding.
+
+    Furniture is skipped too. A line printed on every sheet of a form is the form talking,
+    not the clinician.
     """
     for block in blocks:
-        if block.type is BlockType.HEADING:
+        if block.type is BlockType.HEADING or normalise(block.text) in furniture:
             continue
         for raw in patterns:
-            if m := re.search(raw, block.text, re.IGNORECASE):
-                return block, m
+            m = re.search(raw, block.text, re.IGNORECASE)
+            if not m:
+                continue
+            if require_statement:
+                start, end = _sentence_around(block.text, m.start())
+                if not _looks_like_a_statement(block.text[start:end]):
+                    continue
+            return block, m
     return None
+
+
+def normalise(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _furniture(blocks: list[Block]) -> frozenset[str]:
+    """Lines that repeat within the unit. Chronology content does not appear identically
+    on every sheet (§6, output.repeat_is_furniture)."""
+    seen: dict[str, int] = {}
+    for block in blocks:
+        key = normalise(block.text)
+        if key:
+            seen[key] = seen.get(key, 0) + 1
+    return frozenset(k for k, n in seen.items() if n > 1)
 
 
 def _sentence_around(text: str, at: int) -> tuple[int, int]:
@@ -165,9 +209,11 @@ def _continuation(blocks: list[Block], block: Block, text: str) -> list[Block]:
     return out
 
 
-def _read_trajectory(unit: ReportUnit, blocks: list[Block], spec: dict) -> list[Record]:
+def _read_trajectory(
+    unit: ReportUnit, blocks: list[Block], spec: dict, furniture: frozenset[str]
+) -> list[Record]:
     """Free text **plus** a derived enum, as two records (§8.6)."""
-    hit = _first_hit(blocks, spec.get("cues", []))
+    hit = _first_hit(blocks, spec.get("cues", []), furniture=furniture, require_statement=True)
     if hit is None:
         return [_absent(unit, spec)]
 
@@ -197,8 +243,10 @@ def _read_trajectory(unit: ReportUnit, blocks: list[Block], spec: dict) -> list[
     return records
 
 
-def _read_cue_span(unit: ReportUnit, blocks: list[Block], spec: dict) -> list[Record]:
-    hit = _first_hit(blocks, spec.get("cues", []))
+def _read_cue_span(
+    unit: ReportUnit, blocks: list[Block], spec: dict, furniture: frozenset[str]
+) -> list[Record]:
+    hit = _first_hit(blocks, spec.get("cues", []), furniture=furniture, require_statement=True)
     if hit is None:
         return [_absent(unit, spec)]
     block, match = hit
@@ -216,10 +264,12 @@ def _read_cue_span(unit: ReportUnit, blocks: list[Block], spec: dict) -> list[Re
     return records
 
 
-def _read_classify(unit: ReportUnit, blocks: list[Block], spec: dict, pack: Pack) -> list[Record]:
+def _read_classify(
+    unit: ReportUnit, blocks: list[Block], spec: dict, pack: Pack, furniture: frozenset[str]
+) -> list[Record]:
     """Who obtained the report, and what that is worth under this regime."""
     for value, patterns in (spec.get("values") or {}).items():
-        hit = _first_hit(blocks, patterns)
+        hit = _first_hit(blocks, patterns, furniture=furniture)
         if hit is None:
             continue
         block, match = hit
@@ -243,7 +293,8 @@ def _read_classify(unit: ReportUnit, blocks: list[Block], spec: dict, pack: Pack
 
 
 def _read_claimed_but_unrated(
-    unit: ReportUnit, blocks: list[Block], spec: dict, prior: dict[str, Record]
+    unit: ReportUnit, blocks: list[Block], spec: dict, prior: dict[str, Record],
+    furniture: frozenset[str],
 ) -> list[Record]:
     """Sequelae argued in the text but absent from the official rating (§8.6).
 
@@ -261,7 +312,7 @@ def _read_claimed_but_unrated(
     if not rated_text.strip():
         return [_absent(unit, spec)]
 
-    hit = _first_hit(blocks, spec.get("cues", []))
+    hit = _first_hit(blocks, spec.get("cues", []), furniture=furniture, require_statement=True)
     if hit is None:
         return [_absent(unit, spec)]
 

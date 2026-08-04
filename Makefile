@@ -18,7 +18,7 @@ help:
 	@echo "lint      ruff + tsc"
 	@echo "fixtures  regenerate the synthetic fixtures"
 	@echo "run       run a fixture end to end and print the chronology (F=hard)"
-	@echo "eval      NOT BUILT — Phase 2 (§14)"
+	@echo "eval      score every gold end to end; non-zero if a must-hold fails (§11)"
 
 install:
 	uv venv
@@ -54,10 +54,10 @@ run:
 # `make eval` runs every gold end to end, one MLflow run per fixture, tagged with a shared
 # run group (§11.1). The harness is Phase 2 and is not built — fail loudly rather than
 # exit 0 on an empty target, which would read as "the golds passed".
+# Exits non-zero when a must-hold metric does not hold: groundedness, uncited, coverage
+# and truncation are release-blocking, not diagnostic (§11.3).
 eval:
-	@echo "make eval: the eval harness is Phase 2 and is not built yet (PRD §14)." >&2
-	@echo "Phase 1 ships the deterministic floor; there is no gold to score against." >&2
-	@exit 1
+	$(PY) alie eval --group $${GROUP:-local}
 
 clean:
 	rm -rf var .pytest_cache .ruff_cache web/dist
