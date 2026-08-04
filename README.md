@@ -3,9 +3,12 @@
 Medico-legal document understanding for Quebec compensation regimes.
 [ALIE-PRD.md](ALIE-PRD.md) is the source of truth for architecture; this file is how to run it.
 
-**Status: Phase 1 — the deterministic floor, plus OCR.** Text-layer parse, OCR, manifest,
-template registry, assemble, render, review and export, with the CNESST pack. No language
-model has run. See [What is not built](#what-is-not-built).
+**Status: the PRD is built, and no language model has ever run.** Parse (text layer, OCR,
+vision), manifest, filters, dedupe, regime screening, the §8.6 required fields, assemble,
+render, review, export, delta runs, the firm layer, the eval harness and shadow mode —
+across CNESST, SAAQ and IVAC packs. Every model-dependent path degrades safely and is
+tested against fakes; none has been exercised against a live model.
+See [What is not built](#what-is-not-built).
 
 ---
 
@@ -57,6 +60,21 @@ Tests:
 uv run pytest -q
 ```
 
+Score every gold end to end. Exits non-zero when a release-blocking metric fails —
+groundedness, uncited strings, page coverage and truncation are must-holds, not
+diagnostics (§11.3):
+
+```bash
+make eval
+```
+
+Measure one flag against the baseline over the same golds (§9.1). Reports the metric delta
+and the row churn separately, and refuses to vary two things at once:
+
+```bash
+uv run alie shadow manifest.orphan_rejoin
+```
+
 ## The agent-QA loop (§13.2)
 
 `alie dev` → `POST /dev/reset` → drive the browser → assert `GET /dev/state` → read
@@ -74,14 +92,15 @@ in one step.
 | | |
 |---|---|
 | `src/alie/models/` | the data model (§8) — blocks, units, dates, rows, citations |
-| `src/alie/parse/` | text-layer tier, page labels, block typing (§4.3) |
-| `src/alie/manifest/` | boundaries, orphan re-join, classify, dates, legibility (§4.4) |
+| `src/alie/parse/` | text-layer, OCR and vision tiers; page labels, block typing (§4.3) |
+| `src/alie/manifest/` | boundaries, re-join, classify, dates, filters, dedupe, screening (§4.4) |
 | `src/alie/stages/` | the pipeline, each stage a pure function over ids (§4.2) |
 | `src/alie/stores/` | blocks, manifest, audit log, runs, rows (§4.5) |
+| `src/alie/eval/` | gold scoring, must-hold metrics, shadow mode, MLflow sink (§11, §9.1) |
 | `src/alie/seams/` | the five seams, and no more (§13.4) |
 | `src/alie/packs/` | pack + template-registry loading (§6) |
-| `packs/cnesst/` | the CNESST pack — rules as data, every rule tagged (§6.2) |
-| `fixtures/` | `tiny`, `hard`, `dupes`, each with an expected page map (§13.3) |
+| `packs/` | CNESST, SAAQ, IVAC — rules as data, every rule tagged, gaps declared (§6.2) |
+| `fixtures/` | `tiny` `hard` `dupes` `admin` `fields` `mixed`, each a gold (§13.3) |
 | `web/` | the three-pane review surface (§10.2) and the why-panel (§7.1) |
 
 ### The §14.1 proof
@@ -134,15 +153,28 @@ number is not a page label: `1937` appears on four pages of one bundle, and
 
 Honest scope, not a roadmap gloss.
 
-**Phase 2+, per §14.** The eval harness and MLflow (`make eval` fails loudly rather than
-exiting 0 on nothing). Delta runs. The vision escalation tier — the seam routes to it and
-`parse.vision` exists, but only text-layer and OCR are implemented. The seven-axis
-duplicate view and clean-PDF export. SAAQ and IVAC packs. The health narrative composer.
+**No model has ever run.** This is the largest gap and it cuts across three features.
+There is no API credential on the machine that built this, so stage 4b (model extraction),
+the vision parse tier, and the health composer have never executed against a live model.
+Each degrades safely — the tier is not registered, the stage is skipped, rows fall back to
+deterministic selection — and each is tested against fakes deliberately built to lie, which
+proves the *safety* checks work and says nothing about whether the model is any good at the
+job. Treat every model-dependent number as computable, not computed.
 
-**Stage 4b.** No model is configured. `seams/model.py` fails loudly rather than returning
-plausible text, and the legibility gate is enforced at the seam so no caller can route
-around it. Classification below the pack threshold stays `unknown` and is flagged rather
-than guessed at.
+**The health narrative composer.** Not built. §16 parks the liability question — whether
+the draft is adopted by the clinician, and what disclaimer it carries — and the PRD says to
+answer that before building the vertical.
+
+**Referenced units.** `UnitKind.REFERENCED` exists in the model and nothing produces it. A
+document that appears only as a citation inside another note ("IRM du 12 mai") does not yet
+become a second-hand row.
+
+**SAAQ and IVAC packs are deliberately incomplete, and say where.** Each declares
+`known_gaps` naming the fields it cannot read and why, and the plan surfaces them before
+cost is approved. SAAQ needs real forms catalogued into the template registry; IVAC needs a
+practitioner for two legal questions the PRD leaves open (§15.7, §15.8) — how the CNESST
+REM/2064 coexists with the LAPVIC Répertoire post-2021, and when LATMP takes precedence.
+`faute_lourde` is detected and never adjudicated.
 
 **Table structure.** Table *rows* are detected; cell structure is not recovered. pdfium
 collapses runs of spaces, so whitespace cannot stand in for column geometry. Cell-level
@@ -153,8 +185,10 @@ back to 4b on an unknown revision, but the field maps shipped here read by text 
 Coordinate crops need scanned samples to calibrate against, and inventing coordinates that
 have never been validated is exactly the failure §4.3 warns about.
 
-**Handwriting detection.** Deliberately absent from the text-layer tier: handwriting has no
-text layer, so this tier cannot see it. It belongs to the vision tier.
+**Handwriting detection.** Absent from the text-layer tier: handwriting has no text layer,
+so that tier cannot see it. The vision tier transcribes it and marks it `HANDWRITING`, which
+keeps it out of the deliverable — a reviewer's private note must never reach a document
+destined for opposing counsel (§4.3) — while still recording that the page had a line there.
 
 **Bullet selection rules.** Bullets are transcribed source lines with spans, not summaries,
 which satisfies the citation invariant. *Which* lines get selected is not yet rule-driven —

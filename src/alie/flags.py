@@ -56,6 +56,13 @@ REGISTER: tuple[Flag, ...] = (
     Flag("parse.ocr", FlagKind.IMPLEMENTATION, True,
          "how much of a real bundle the free path misses — answered: 91% of units",
          "% pages queued as unparseable; units the pipeline can read"),
+    # Built and off. Reachable only because the seam escalates on output *quality*: the OCR
+    # tier claims every page it is offered, so without escalation a page OCR mangles would
+    # never get a more expensive look and this metric would be permanently zero.
+    #
+    # Degrades safely: with no credential the tier is not registered and pages fall through
+    # exactly as when the flag was off. The live model path has never run — there is no key
+    # on the machine that built this — so the metric below is computable, not computed.
     Flag("parse.vision", FlagKind.IMPLEMENTATION, False,
          "how much OCR still fails",
          "% pages OCR queues that vision resolves; block confidence delta"),

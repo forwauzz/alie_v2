@@ -96,6 +96,53 @@ class AnthropicBackend:
             return {}, response
 
 
+    def transcribe(
+        self,
+        system: str,
+        image_base64: str,
+        schema: dict[str, Any],
+        *,
+        media_type: str = "image/png",
+        max_tokens: int | None = None,
+    ) -> tuple[dict[str, Any], ModelResponse]:
+        """Read a page image and return its lines (§4.3 vision tier).
+
+        Unlike extraction, there is no source text to verify the answer against — here the
+        model *is* the source. The engine compensates by stamping every block
+        `BlockSource.VISION` at a confidence ceiling, so a transcription never carries the
+        weight of a page the cheap tiers read cleanly.
+        """
+        message = self._client.messages.create(
+            model=self.name,
+            max_tokens=max_tokens or self.max_tokens,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": image_base64,
+                            },
+                        }
+                    ],
+                }
+            ],
+            output_config={"format": {"type": "json_schema", "schema": schema}},
+        )
+        response = _to_response(message, self.name)
+        if message.stop_reason == "refusal" or response.truncated:
+            return {}, response
+        text = next((b.text for b in message.content if b.type == "text"), "")
+        try:
+            return json.loads(text), response
+        except json.JSONDecodeError:
+            return {}, response
+
+
 def _to_response(message: Any, model: str) -> ModelResponse:
     usage = getattr(message, "usage", None)
     return ModelResponse(
