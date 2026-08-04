@@ -30,3 +30,7 @@ fixtures/gold-*/
 # OS
 Thumbs.db
 .DS_Store
+
+# Web build tooling
+web/node_modules/
+web/tsconfig.tsbuildinfo

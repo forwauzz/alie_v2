@@ -57,9 +57,12 @@ def load_settings() -> Settings:
         log_dir=_env_path("ALIE_LOG_DIR", var / "logs"),
         packs_dir=_env_path("ALIE_PACKS_DIR", REPO_ROOT / "packs"),
         fixtures_dir=_env_path("ALIE_FIXTURES_DIR", REPO_ROOT / "fixtures"),
+        # Distinctive rather than conventional. 5173 is the Vite default and 8000 the
+        # uvicorn one, so both collide with whatever else is running on the machine —
+        # and a fixed port that fails loudly is only useful if it is usually free.
         api_port=_env_int("ALIE_API_PORT", 8471),
         mlflow_port=_env_int("ALIE_MLFLOW_PORT", 5471),
-        web_port=_env_int("ALIE_WEB_PORT", 5173),
+        web_port=_env_int("ALIE_WEB_PORT", 5472),
         actor=os.environ.get("ALIE_ACTOR", "local"),
     )
 
