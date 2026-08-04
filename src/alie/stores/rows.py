@@ -25,8 +25,9 @@ def replace_for_run(conn: sqlite3.Connection, run_id: str, rows: list[Row]) -> N
             """INSERT INTO rows_out (id, run_id, case_id, date_value, date_status,
                                      date_rule, date_explanation, date_alternatives,
                                      title, author, doc_class, regime, unit_ids,
-                                     illegible_reason, second_hand, ord)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                     illegible_reason, second_hand,
+                                     claim_event, claim_event_rule, excluded_by, ord)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 row.id,
                 run_id,
@@ -43,6 +44,9 @@ def replace_for_run(conn: sqlite3.Connection, run_id: str, rows: list[Row]) -> N
                 json.dumps(row.unit_ids),
                 row.illegible_reason,
                 1 if row.second_hand else 0,
+                row.claim_event.isoformat() if row.claim_event else None,
+                row.claim_event_rule,
+                row.excluded_by,
                 ord_,
             ),
         )
@@ -119,6 +123,9 @@ def for_run(conn: sqlite3.Connection, run_id: str) -> list[Row]:
             unit_ids=json.loads(r["unit_ids"]),
             illegible_reason=r["illegible_reason"],
             second_hand=bool(r["second_hand"]),
+            claim_event=date.fromisoformat(r["claim_event"]) if r["claim_event"] else None,
+            claim_event_rule=r["claim_event_rule"],
+            excluded_by=r["excluded_by"],
         )
         row.bullets = [
             Bullet(

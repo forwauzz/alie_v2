@@ -54,6 +54,17 @@ class Pack:
         base = field.split(".")[0]
         return self.output.get("field_lines", {}).get(base)
 
+    def state_label(self, field: str, state: str) -> str:
+        """How a first-class state is worded in the deliverable.
+
+        An internal state id (`trop_tot`) must never reach a document the firm hands to
+        opposing counsel — the same rule as `unknown_label`. Unmapped states fall through
+        unchanged rather than becoming blank: a missing label is a pack gap to notice, not
+        a value to lose (§8.6).
+        """
+        base = field.split(".")[0]
+        return self.output.get("state_labels", {}).get(base, {}).get(state, state)
+
     @property
     def date_roles(self) -> dict[str, Any]:
         return self.dates.get("roles", {})
@@ -72,6 +83,18 @@ class Pack:
 
     def toggles(self) -> dict[str, bool]:
         return self.pack.get("unit_toggles", {})
+
+    @property
+    def admin_classes(self) -> set[str]:
+        """Classes the pack calls administrative. Used by the zero-content filter, which
+        must never fire on a clinical document (§8.5)."""
+        return {c["id"] for c in self.class_list if c.get("is_admin")}
+
+    @property
+    def first_class_values(self) -> dict[str, Any]:
+        """Values that must survive as themselves, never collapsed to null or false
+        (§8.6). `aucune` is not `trop tôt` is not absent."""
+        return self.pack.get("first_class_values", {})
 
     def is_diagnostic_study(self, class_id: str) -> bool:
         c = self.class_by_id(class_id)

@@ -6,6 +6,7 @@ CNESST framework's Appendix B.
 | `tiny`  | happy path, seconds; printed label != pdf index                 |
 | `hard`  | illegible, undated, ambiguous date, orphan page, OCR damage     |
 | `dupes` | two bundles: refax, byte-identical pair, later-visit pair       |
+| `admin` | filters: billing, consent, zero-content admin, clinical control |
 
 `gold-cnesst` is not in the repo; it points at real files (§13.3).
 """
@@ -256,6 +257,67 @@ def _dupes_chum() -> list[Page]:
 
 #: Expected page map per fixture, in the shape of Appendix B. Tests assert the manifest
 #: reproduces these spans and dates — the §14.1 proof, with no model having run.
+def _admin() -> list[Page]:
+    """Filters (§6). Admin noise excluded *by rule*, with a clinical control that must
+    survive — a filter that removes a consultation note is worse than no filter at all.
+
+    Nothing here is dropped: excluded units still reach the manifest with `excluded_by`
+    naming the rule (§3.4).
+    """
+    return [
+        Page(
+            printed_label="1",
+            lines=[
+                "# FACTURE",
+                "Clinique médicale Mère et Monde",
+                "Numéro de facturation: 44921-03",
+                "Date: 2022-07-04",
+                "",
+                "Consultation ............ 95,00 $",
+                "Total ................... 95,00 $",
+            ],
+        ),
+        Page(
+            printed_label="2",
+            lines=[
+                "# FORMULAIRE DE CONSENTEMENT",
+                "Autorisation de divulgation de renseignements médicaux",
+                "Je, TREMBLAY, Jean, autorise la transmission de mon dossier.",
+                "Date: 2022-07-05",
+                "",
+                SIG + "Jean Tremblay",
+            ],
+        ),
+        # The control. Same bundle, same patient, genuinely clinical — must survive every
+        # rule above it.
+        Page(
+            printed_label="3",
+            lines=[
+                "# NOTE DE CONSULTATION",
+                "Clinique du Nord",
+                "Date de la visite: 2022-07-12",
+                "",
+                "## SUBJECTIF",
+                "Lombalgie persistante, irradiation au membre inférieur droit.",
+                "",
+                "## OBJECTIF",
+                "Lasègue droit positif à 30 degrés.",
+                "",
+                SIG + "Dre Marie Lavoie",
+            ],
+        ),
+        # Admin class, no clinical content: a title and a stamp. Excluded by rule; a
+        # clinical document this empty would be kept as a title-only row (§8.5).
+        Page(
+            printed_label="4",
+            lines=[
+                "# REÇU",
+                "Reçu pour dépôt au dossier.",
+            ],
+        ),
+    ]
+
+
 EXPECTED: dict[str, dict] = {
     "tiny": {
         "bundles": {"Médical": "Medical.pdf"},
@@ -279,6 +341,20 @@ EXPECTED: dict[str, dict] = {
             {"pages": [8], "class": "unknown", "row_date": None, "status": "illegible"},
         ],
     },
+    "admin": {
+        "bundles": {"Médical": "Medical.pdf"},
+        "units": [
+            {"pages": [1], "class": "administratif", "excluded_by": "cnesst.filter.billing"},
+            {"pages": [2], "class": "administratif", "excluded_by": "cnesst.filter.consent"},
+            # The control: clinical, kept, dated.
+            {"pages": [3], "class": "note_consultation", "row_date": "2022-07-12"},
+            {
+                "pages": [4],
+                "class": "administratif",
+                "excluded_by": "cnesst.filter.zero_content_admin",
+            },
+        ],
+    },
     "dupes": {
         "bundles": {"Médical": "Medical.pdf", "CHUM": "CHUM.pdf"},
         "pairs": [
@@ -292,6 +368,7 @@ EXPECTED: dict[str, dict] = {
 _BUILDERS = {
     ("tiny", "Medical.pdf"): _tiny,
     ("hard", "Medical.pdf"): _hard,
+    ("admin", "Medical.pdf"): _admin,
     ("dupes", "Medical.pdf"): _dupes_medical,
     ("dupes", "CHUM.pdf"): _dupes_chum,
 }

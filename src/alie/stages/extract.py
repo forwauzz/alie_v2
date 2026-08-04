@@ -97,7 +97,11 @@ class ExtractResult:
 
 
 def run_unit(
-    conn: sqlite3.Connection, unit_id: str, *, run_id: str | None = None
+    conn: sqlite3.Connection,
+    unit_id: str,
+    *,
+    run_id: str | None = None,
+    already_resolved: frozenset[str] = frozenset(),
 ) -> ExtractResult:
     unit = manifest.get_unit(conn, unit_id)
     if unit is None:
@@ -127,7 +131,7 @@ def run_unit(
         return skip("no_blocks")
 
     prompt = resolve_prompt(pack, "extract_row_lines", doc_class=unit.doc_class)
-    system, user = _render(prompt, unit, blocks, pack)
+    system, user = _render(prompt, unit, blocks, pack, already_resolved)
 
     backend = _backend()
     if backend is None:
@@ -219,11 +223,24 @@ def _backend() -> model_seam.ModelBackend | None:
     return model_seam.backend_for("extract") if register_if_configured() else None
 
 
-def _render(prompt: Prompt, unit: ReportUnit, blocks: list[Block], pack: Pack) -> tuple[str, str]:
+def _render(
+    prompt: Prompt,
+    unit: ReportUnit,
+    blocks: list[Block],
+    pack: Pack,
+    already_resolved: frozenset[str] = frozenset(),
+) -> tuple[str, str]:
     listing = "\n".join(f"{b.id} | {b.text}" for b in blocks if b.is_body_text)
+    # Fields a template already read from a known coordinate. Naming them keeps 4b from
+    # re-selecting what 4a resolved deterministically — that is cost, and a chance for the
+    # model to disagree with an answer that is already right (§4.2).
+    resolved = (
+        ", ".join(sorted(f.split(".")[0] for f in already_resolved)) if already_resolved else "—"
+    )
     return prompt.render(
         doc_class_label=pack.class_label(unit.doc_class),
         row_date=unit.row_date.render() if unit.row_date else "—",
+        already_resolved=resolved,
         blocks=listing,
     )
 

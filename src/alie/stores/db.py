@@ -43,8 +43,30 @@ def migrate(db_path: Path | None = None) -> None:
     conn = connect(db_path)
     try:
         conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        _add_missing_columns(conn)
     finally:
         conn.close()
+
+
+#: Columns added to tables that already exist on someone's machine. `CREATE TABLE IF NOT
+#: EXISTS` is a no-op against an existing table, so a new column in schema.sql would apply
+#: to fresh databases only — and the mismatch surfaces as a query error at run time rather
+#: than at migration time. Adding a column is the one schema change SQLite makes cheap and
+#: safe; anything else needs a real migration.
+_ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("rows_out", "claim_event", "TEXT"),
+    ("rows_out", "claim_event_rule", "TEXT"),
+    ("rows_out", "excluded_by", "TEXT"),
+)
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    for table, column, decl in _ADDED_COLUMNS:
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            continue  # table not created yet; schema.sql owns it
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 @contextmanager

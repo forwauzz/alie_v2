@@ -177,6 +177,15 @@ CREATE TABLE IF NOT EXISTS rows_out (
     unit_ids         TEXT NOT NULL,
     illegible_reason TEXT,
     second_hand      INTEGER NOT NULL,
+    -- Which claim this row belongs to: 1990 / 2011 / 2022 coexist in one file (§8.6).
+    -- NULL is a real answer — a report predating every claim event is left unattributed
+    -- rather than assigned to the nearest one.
+    claim_event      TEXT,
+    claim_event_rule TEXT,
+    -- Excluded by a filter rule. The row still exists; exclusion is a status, not a
+    -- deletion, and a deduplicated or filtered export carries a manifest of what was held
+    -- back and why (§3.4, §10.1).
+    excluded_by      TEXT,
     ord              INTEGER NOT NULL,
     PRIMARY KEY (run_id, id)
 );

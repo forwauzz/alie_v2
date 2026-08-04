@@ -14,7 +14,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from ..manifest import boundaries, classify, datefind, dateselect, legibility, rejoin
+from ..manifest import boundaries, classify, datefind, dateselect, filters, legibility, rejoin
 from ..models import Block, Legibility, ReportUnit, RowStatus, UnitKind
 from ..packs import Pack
 from ..packs import load as load_pack
@@ -34,6 +34,12 @@ class ManifestResult:
     illegible: int
     unclassified: int
     needs_fallback: int
+    #: Units a filter rule removed from the deliverable. They remain in the manifest with
+    #: `excluded_by` naming the rule (§3.4).
+    excluded: int = 0
+    #: Filter rules the engine could not evaluate because the feature they rest on is not
+    #: built. Surfaced rather than silently treated as "did not fire" (§6).
+    filters_unavailable: tuple[str, ...] = ()
     #: Sheets absent from a fax transmission. Not a parse failure — a fact about the
     #: bundle the firm was sent, and one a paralegal needs before certifying a chronology
     #: as complete (§3.4).
@@ -94,7 +100,10 @@ def run(
     producer = Producer()
 
     manifest.delete_units_for_bundle(conn, bundle_id)
-    counts = dict(undated=0, ambiguous=0, illegible=0, unclassified=0, fallback=0, split=0)
+    counts = dict(
+        undated=0, ambiguous=0, illegible=0, unclassified=0, fallback=0, split=0, excluded=0
+    )
+    unavailable_filters: set[str] = set()
 
     for pages in groups:
         unit_blocks = [b for p in pages for b in by_page.get(p, [])]
@@ -103,6 +112,9 @@ def run(
             anchors, role_for, producer, run_id,
         )
         _tally(unit, counts)
+        unavailable_filters.update(
+            f for f in unit.attrs.get("filters_unavailable", "").split(",") if f
+        )
 
     result = ManifestResult(
         bundle_id=bundle_id,
@@ -115,6 +127,8 @@ def run(
         unclassified=counts["unclassified"],
         needs_fallback=counts["fallback"],
         missing_sheets=tuple(gaps),
+        excluded=counts["excluded"],
+        filters_unavailable=tuple(sorted(unavailable_filters)),
     )
     audit.record(
         conn, subject_type="bundle", subject_id=bundle_id, action="manifest",
@@ -122,9 +136,12 @@ def run(
         detail={
             k: getattr(result, k)
             for k in result.__dataclass_fields__
-            if k not in ("bundle_id", "missing_sheets")
+            if k not in ("bundle_id", "missing_sheets", "filters_unavailable")
         }
-        | {"missing_sheets": len(result.missing_sheets)},
+        | {
+            "missing_sheets": len(result.missing_sheets),
+            "filters_unavailable": list(result.filters_unavailable),
+        },
     )
     return result
 
@@ -154,6 +171,12 @@ def _build_unit(
         facts, doc_class=classification.doc_class, pack=pack, legibility=assessment.level
     )
 
+    # Excluded units still reach the manifest with a status; nothing is dropped (§3.4).
+    verdict, unavailable = filters.evaluate(
+        unit_blocks, pack,
+        doc_class=classification.doc_class, admin_classes=pack.admin_classes,
+    )
+
     unit = ReportUnit(
         id=unit_id,
         bundle_id=bundle["id"],
@@ -168,12 +191,19 @@ def _build_unit(
         form_serial=serial,
         form_revision=revision,
         kind=UnitKind.PRIMARY,
+        excluded_by=verdict.rule_id,
         attrs={
             "legibility_reason": assessment.reason,
             "class_matched": ";".join(classification.matched),
             "needs_class_fallback": str(classification.needs_fallback).lower(),
             "unlabelled_pages": ",".join(str(p) for p in pages if not labels.get(p)),
-        },
+        }
+        | ({"excluded_reason": verdict.reason or ""} if verdict.excluded else {})
+        | ({"excluded_evidence": verdict.evidence or ""} if verdict.evidence else {})
+        # Filters the engine could not judge because the feature they depend on is not
+        # built. Recorded per unit so "0 excluded by rule" is never mistaken for "every
+        # rule ran and none fired".
+        | ({"filters_unavailable": ",".join(unavailable)} if unavailable else {}),
     )
     unit = _apply_corrections(conn, unit, row_date)
 
@@ -237,3 +267,5 @@ def _tally(unit: ReportUnit, counts: dict[str, int]) -> None:
         counts["unclassified"] += 1
     if unit.attrs.get("needs_class_fallback") == "true":
         counts["fallback"] += 1
+    if unit.excluded_by:
+        counts["excluded"] += 1

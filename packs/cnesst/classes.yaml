@@ -183,9 +183,26 @@ classes:
   - id: administratif
     label: Document administratif
     tag: INF-H
+    # Zero-content *clinical* documents are kept as title-only rows for evidentiary
+    # completeness; the zero-content filter applies to admin classes only (§8.5). The
+    # engine holds no taxonomy of its own, so which classes are administrative is the
+    # pack's statement, not a branch in the code (§3).
+    is_admin: true
     headings:
       - "facture"
-      - "re[çc]u"
+      - "^\\s*re[çc]u\\b"
       - "formulaire\\s*de\\s*consentement"
       - "autorisation\\s*de\\s*divulgation"
-    confidence: 0.75
+    body:
+      - "num[ée]ro\\s*de\\s*facturation"
+      - "\\btotal\\b"
+      - "autorise\\s*la\\s*transmission"
+      - "pour\\s*d[ée]p[ôo]t\\s*au\\s*dossier"
+    # A document that names itself FACTURE is as unambiguous a signal as a class gets —
+    # more so than most clinical headings, which describe content rather than type.
+    #
+    # This was 0.75, which multiplied by the 0.9 heading-only strength gave 0.675 —
+    # permanently under the pack's own min_confidence of 0.7. With no `body` patterns the
+    # class could never reach full strength either, so `administratif` was unreachable by
+    # rule and every filter scoped to admin classes was dead.
+    confidence: 0.85

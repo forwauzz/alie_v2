@@ -105,9 +105,34 @@ row_content:
   repeat_is_furniture: 2
 
 field_lines:
-  atteinte_permanente: "Atteinte permanente : {value}"
+  # The pack's own vocabulary: APIPP under CNESST, IPNP under SAAQ (§6). The field id is
+  # `apipp` to match the first-class declaration; the rendered wording stays the long form
+  # the paralegal reads.
+  apipp: "Atteinte permanente : {value}"
   consolidation: "Consolidation : {value}"
   limitations_fonctionnelles: "Limitations fonctionnelles : {value}"
   diagnostic: "Diagnostic : {value}"
   bareme: "Barème {code} — {pct} %"
   bareme_with_prior: "Barème {code} — {pct} % ({prior_pct} % sur antérieur)"
+
+# How a first-class state is worded in the deliverable. An internal state id must never
+# reach a document the firm hands to opposing counsel — the same rule as `unknown_label`.
+#
+# The four states stay four in the output. `aucune` ≠ `trop tôt` ≠ absent, and collapsing
+# any pair here would undo the whole point of storing them separately (§8.6).
+state_labels:
+  apipp:
+    rated: "oui"
+    aucune: "aucune"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignée au rapport"
+  limitations_fonctionnelles:
+    rated: "oui"
+    aucune: "aucune"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignées au rapport"
+  consolidation:
+    oui: "oui"
+    non: "non"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignée au rapport"

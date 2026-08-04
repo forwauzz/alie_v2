@@ -15,6 +15,7 @@ from typing import Any
 
 from .stages import assemble, extract, manifest_build, parse, render, structured
 from .stores import audit, cases, manifest, runs
+from .stores import records as records_store
 from .stores import rows as rows_store
 
 PARSE, MANIFEST, STRUCTURED, ASSEMBLE, RENDER = (
@@ -89,11 +90,23 @@ def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
         }
 
     if stage == STRUCTURED:
-        result = structured.run_unit(conn, payload["unit_id"], run_id=run_id)
-        detail = {"template": result.template, "fields": result.fields_read}
-        # 4a runs before 4b, and 4b fills only what remains (§4.2).
+        # 4a runs before 4b, and 4b fills only what remains (§4.2). The flag makes that
+        # orderable rather than assumed: with it off, 4b sees an empty unit and does the
+        # whole job, which is the comparison its metric asks for — "% fields resolved
+        # without the model; cost per unit".
+        structured_first = flags.get("extract.structured_first", True)
+        detail: dict[str, Any] = {"structured_first": structured_first}
+        resolved: frozenset[str] = frozenset()
+
+        if structured_first:
+            result = structured.run_unit(conn, payload["unit_id"], run_id=run_id)
+            resolved = records_store.fields_for_unit(conn, payload["unit_id"], stage="4a")
+            detail |= {"template": result.template, "fields": result.fields_read}
+
         if flags.get("extract.model"):
-            extracted = extract.run_unit(conn, payload["unit_id"], run_id=run_id)
+            extracted = extract.run_unit(
+                conn, payload["unit_id"], run_id=run_id, already_resolved=resolved
+            )
             detail |= {
                 "extracted": extracted.kept,
                 "groundedness": extracted.groundedness,

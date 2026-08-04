@@ -17,6 +17,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 
+from ..manifest import claimevents
 from ..models import (
     Block,
     BlockType,
@@ -89,10 +90,16 @@ def run(conn: sqlite3.Connection, case_id: str, *, run_id: str | None = None) ->
     for unit in included:
         buckets.setdefault(_bucket_key(unit, pack), []).append(unit)
 
+    # The claim-event dimension, derived from the event-role dates the manifest already
+    # holds (§8.6). Computed once for the case: attribution needs every event date in the
+    # file, not just this row's.
+    attributions = {a.unit_id: a for a in claimevents.attribute_case(conn, case_id)}
+
     rows: list[Row] = []
     merged = unions = studies = 0
     for group in buckets.values():
         row = _build_row(conn, case_id, group, pack, labels)
+        _attribute_claim(row, group, attributions)
         rows.append(row)
         if len(group) > 1:
             merged += 1
@@ -103,6 +110,24 @@ def run(conn: sqlite3.Connection, case_id: str, *, run_id: str | None = None) ->
 
     rows.sort(key=lambda r: (0 if r.is_undated else 1, r.sort_key()))
     return AssembleResult(case_id, rows, merged, studies, unions, excluded)
+
+
+def _attribute_claim(row: Row, group: list[ReportUnit], attributions: dict) -> None:
+    """Place a row on the claim-event dimension.
+
+    A merged row draws from several units. If they disagree about which claim they belong
+    to, the row is left unattributed — an encounter whose documents point at two different
+    accidents is a finding for the paralegal, not something to average away (§8.6).
+    """
+    found = [attributions[u.id] for u in group if u.id in attributions]
+    events = {a.event for a in found if a.event is not None}
+    if len(events) == 1:
+        row.claim_event = events.pop()
+        row.claim_event_rule = next(a.rule for a in found if a.event is not None)
+    elif len(events) > 1:
+        row.claim_event_rule = "claim_event.units_disagree"
+    elif found:
+        row.claim_event_rule = found[0].rule
 
 
 def _bucket_key(unit: ReportUnit, pack: Pack) -> tuple:
@@ -242,7 +267,8 @@ def _record_line(record: Record, pack: Pack) -> str:
     (`{"code": "204 219", "pct": "2"}`) must never appear in the deliverable.
     """
     template = pack.field_line(record.field)
-    raw = record.value or ""
+    # First-class states render through the pack's wording, never as the stored id.
+    raw = pack.state_label(record.field, record.value or "")
     fields: dict[str, str] = {}
     if raw.startswith("{"):
         try:

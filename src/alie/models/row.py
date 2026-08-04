@@ -8,6 +8,7 @@ said this" must survive it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 from .citation import Citation
 from .dates import RowDate
@@ -60,6 +61,16 @@ class Row:
 
     illegible_reason: str | None = None
     second_hand: bool = False
+
+    #: Which claim this row belongs to — 1990 / 2011 / 2022 coexist in one file (§8.6).
+    #: `None` is a real answer: a report predating every claim event is left unattributed
+    #: rather than assigned to the nearest one.
+    claim_event: date | None = None
+    claim_event_rule: str | None = None
+
+    #: Excluded by a filter rule. The row still exists; exclusion is a status, not a
+    #: deletion, and the export carries a manifest of what was held back and why (§3.4).
+    excluded_by: str | None = None
 
     @property
     def confidence(self) -> float:

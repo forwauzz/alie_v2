@@ -171,7 +171,7 @@ def test_source_crop_exposes_the_bbox_a_checkbox_read_cites(client):
     units = client.get(f"/cases/{case_id}/units").json()
     rem = next(u for u in units if u["form_serial"] == "2064")
     why = client.get(f"/units/{rem['id']}/why").json()
-    record = next(r for r in why["records"] if r["field"] == "atteinte_permanente")
+    record = next(r for r in why["records"] if r["field"] == "apipp")
 
     crop = client.get(f"/blocks/{record['block_id']}").json()
     assert crop["type"] == "checkbox"

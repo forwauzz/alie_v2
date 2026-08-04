@@ -255,6 +255,33 @@ def test_extraction_refuses_a_backend_that_cannot_constrain_output(store):
         model_seam._BACKENDS.pop("extract", None)
 
 
+def test_4b_is_told_what_4a_already_resolved(store, use_backend):
+    """4a runs before 4b, and 4b fills only what remains (§4.2). Re-selecting a field a
+    template read from a known coordinate is cost, plus a chance for the model to disagree
+    with an answer that is already right."""
+    backend = use_backend({"lines": [], "notes": []})
+    with db.session(store.db_path) as conn:
+        unit = _unit(conn)
+        extract.run_unit(
+            conn, unit.id, already_resolved=frozenset({"consolidation.oui", "diagnostic"})
+        )
+
+    _system, user = backend.calls[0]
+    assert "consolidation, diagnostic" in user
+
+
+def test_structured_first_off_sends_4b_an_unresolved_unit(store, use_backend):
+    """The flag's metric is a comparison — "% fields resolved without the model" is only
+    measurable if turning it off actually changes what 4b is asked to do (§9.2)."""
+    backend = use_backend({"lines": [], "notes": []})
+    with db.session(store.db_path) as conn:
+        unit = _unit(conn)
+        extract.run_unit(conn, unit.id)
+
+    _system, user = backend.calls[0]
+    assert "à ne pas resélectionner : —" in user
+
+
 # ------------------------------------------------------------------ prompt registry
 
 
@@ -263,10 +290,19 @@ def test_prompts_are_addressable_and_versioned(pack):
     which is what makes re-running only affected units possible (§7)."""
     from alie.packs.prompts import available, resolve
 
-    assert available(pack)["extract_row_lines"] == [1]
+    versions = available(pack)["extract_row_lines"]
+    assert versions == sorted(versions) and len(versions) >= 2
+
+    # Unpinned resolves to the newest.
     prompt = resolve(pack, "extract_row_lines", doc_class="note_consultation")
-    assert prompt.ref == "extract_row_lines@v1"
+    assert prompt.ref == f"extract_row_lines@v{versions[-1]}"
     assert prompt.changelog
+
+    # Pinning still reaches the old one, unmutated — the reason a version is an
+    # addressable object rather than a git history (§7).
+    old = resolve(pack, "extract_row_lines", doc_class="note_consultation", version=1)
+    assert old.ref == "extract_row_lines@v1"
+    assert "already_resolved" not in old.user
 
 
 def test_a_missing_prompt_variable_is_an_error_not_a_blank(pack):

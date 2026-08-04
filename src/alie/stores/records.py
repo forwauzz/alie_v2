@@ -102,6 +102,20 @@ def for_unit(conn: sqlite3.Connection, unit_id: str) -> list[Record]:
     return [_to_record(r) for r in rows]
 
 
+def fields_for_unit(conn: sqlite3.Connection, unit_id: str, *, stage: str) -> frozenset[str]:
+    """Field names a stage already resolved for this unit.
+
+    Passed to 4b so it fills only what remains (§4.2) — and so the model is not asked to
+    re-select something a template already read from a known coordinate, which is both
+    cost and a chance to disagree with a deterministic answer.
+    """
+    rows = conn.execute(
+        "SELECT DISTINCT field FROM records WHERE unit_id = ? AND stage = ? AND value IS NOT NULL",
+        (unit_id, stage),
+    ).fetchall()
+    return frozenset(r["field"] for r in rows)
+
+
 def fields_resolved_without_model(conn: sqlite3.Connection, case_id: str) -> tuple[int, int]:
     """Backs the `extract.structured_first` metric: % fields resolved without the model
     (§9.2)."""

@@ -1,0 +1,35 @@
+{
+  "bundles": {
+    "Médical": "Medical.pdf"
+  },
+  "units": [
+    {
+      "class": "administratif",
+      "excluded_by": "cnesst.filter.billing",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "class": "administratif",
+      "excluded_by": "cnesst.filter.consent",
+      "pages": [
+        2
+      ]
+    },
+    {
+      "class": "note_consultation",
+      "pages": [
+        3
+      ],
+      "row_date": "2022-07-12"
+    },
+    {
+      "class": "administratif",
+      "excluded_by": "cnesst.filter.zero_content_admin",
+      "pages": [
+        4
+      ]
+    }
+  ]
+}

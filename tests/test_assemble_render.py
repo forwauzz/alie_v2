@@ -42,7 +42,9 @@ def test_absent_field_is_distinct_from_a_blank_one(store):
         )
         recs = {r.field: r for r in records.for_unit(conn, rem.id)}
 
-    assert recs["atteinte_permanente"].value == "oui"
+    # `rated`, not `oui`: APIPP is not a yes/no question. A rated impairment carries a
+    # percentage; `aucune` is a finding of no impairment; `trop_tot` is not yet assessable.
+    assert recs["apipp"].value == "rated"
     assert recs["consolidation"].value == "absent"
     # An absence has no text to cite; that is derived, not an uncited transcription.
     assert recs["consolidation"].derived

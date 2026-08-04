@@ -15,14 +15,34 @@ doc_class: rapport_evaluation_medicale
 tag: KEY
 
 fields:
-  - id: atteinte_permanente
+  # Named `apipp` to match the pack's first-class declaration. It was `atteinte_permanente`,
+  # which meant no template could produce a value the pack declared non-negotiable — and
+  # the gap was invisible because nothing read the declaration (§8.6).
+  #
+  # The states are `rated` / `aucune`, not `oui` / `non`. APIPP is not a yes/no question:
+  # a rated impairment carries a percentage, and `aucune` is a finding of no impairment.
+  # Storing them as a boolean loses the difference between "assessed at none" and "not yet
+  # assessable".
+  - id: apipp
     kind: checkbox
     tag: KEY
     anchor: "atteinte\\s*permanente"
     states:
-      oui: "\\[\\s*[xX✓]\\s*\\]\\s*Oui"
-      non: "\\[\\s*[xX✓]\\s*\\]\\s*Non"
+      rated: "\\[\\s*[xX✓]\\s*\\]\\s*Oui"
+      aucune: "\\[\\s*[xX✓]\\s*\\]\\s*Non"
     # `<empty>` is load-bearing: field present but blank is not field absent (§4.3, §8.6).
+    blank_state: trop_tot
+    absent_state: absent
+
+  # Four states, same reasoning. The REM asks for limitations separately from impairment;
+  # a file can carry an APIPP with no LF and the reverse.
+  - id: limitations_fonctionnelles
+    kind: checkbox
+    tag: KEY
+    anchor: "limitations?\\s*fonctionnelles?"
+    states:
+      rated: "\\[\\s*[xX✓]\\s*\\]\\s*Oui"
+      aucune: "\\[\\s*[xX✓]\\s*\\]\\s*Non"
     blank_state: trop_tot
     absent_state: absent
 
