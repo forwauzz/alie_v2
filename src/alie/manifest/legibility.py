@@ -10,9 +10,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..models import Block, Legibility
+from ..parse.textquality import word_likeness
 
 #: Below this many characters per page, a page carries no readable content.
 MIN_CHARS_PER_PAGE = 40
+
+#: Word-likeness thresholds, set against the 139-page reference bundle (see
+#: `parse.textquality`). A unit below the first is noise wearing a text layer and must
+#: never reach a model; below the second it is readable enough to review but not to trust.
+ILLEGIBLE_QUALITY = 0.35
+DEGRADED_QUALITY = 0.60
 
 #: Mean block confidence below this reads as degraded — worth flagging, still legible.
 DEGRADED_CONFIDENCE = 0.8
@@ -43,6 +50,22 @@ def assess(blocks: list[Block], page_count: int) -> LegibilityAssessment:
         return LegibilityAssessment(
             Legibility.ILLEGIBLE,
             f"Only {chars} characters across {page_count} page(s); below the readable floor.",
+        )
+
+    # Quantity is not quality. A page can be dense with characters and still be noise —
+    # this is the check that keeps a pre-OCR'd scan out of the model.
+    quality = word_likeness(" ".join(b.text for b in blocks))
+    if quality < ILLEGIBLE_QUALITY:
+        return LegibilityAssessment(
+            Legibility.ILLEGIBLE,
+            f"Text layer present but only {quality:.0%} of it reads as words; "
+            "the scan's own OCR pass failed.",
+        )
+    if quality < DEGRADED_QUALITY:
+        return LegibilityAssessment(
+            Legibility.DEGRADED,
+            f"{quality:.0%} of the text reads as words; legible enough to review, "
+            "not to trust unread.",
         )
 
     mean_confidence = sum(b.confidence for b in blocks) / len(blocks)

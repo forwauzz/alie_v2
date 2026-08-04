@@ -13,8 +13,8 @@ import sqlite3
 from dataclasses import dataclass
 
 from ..models import BlockType
+from ..parse import pagelabel, register_default_tiers
 from ..parse import pdfium as pdfium_io
-from ..parse import register_default_tiers
 from ..provenance import Producer
 from ..seams import parser as parser_seam
 from ..seams.parser import PageInput
@@ -51,6 +51,7 @@ def run(conn: sqlite3.Connection, bundle_id: str, *, run_id: str | None = None) 
     all_blocks = []
     page_rows = []
     unparseable: list[int] = []
+    label_candidates: dict[int, tuple[str, str]] = {}
 
     for idx, (width, height) in enumerate(sizes, start=1):
         page = PageInput(
@@ -70,16 +71,25 @@ def run(conn: sqlite3.Connection, bundle_id: str, *, run_id: str | None = None) 
             unparseable.append(idx)
 
         all_blocks.extend(page_blocks)
+        candidate = _label_candidate(page_blocks)
+        if candidate:
+            label_candidates[idx] = candidate
         page_rows.append(
             {
                 "pdf_index": idx,
-                "printed_label": _printed_label(page_blocks),
+                "printed_label": None,  # filled in below, once the whole bundle is known
                 "width": width,
                 "height": height,
                 "char_count": sum(len(b.text) for b in page_blocks),
                 "parse_source": source,
             }
         )
+
+    # A bare footer number is only a page label if it behaves like one across the bundle.
+    # That cannot be decided one page at a time, so it happens here (§8.1).
+    confirmed = pagelabel.confirm_bare_labels(label_candidates)
+    for row in page_rows:
+        row["printed_label"] = confirmed.get(row["pdf_index"])
 
     blocks_store.replace_bundle(conn, bundle_id, all_blocks, producer)
     cases.replace_pages(conn, bundle_id, page_rows, producer)
@@ -109,8 +119,14 @@ def run(conn: sqlite3.Connection, bundle_id: str, *, run_id: str | None = None) 
     return result
 
 
-def _printed_label(page_blocks: list) -> str | None:
-    """The last page-label block wins: footers sit below headers, and a running header
-    repeating the document number is the more common false positive."""
+def _label_candidate(page_blocks: list) -> tuple[str, str] | None:
+    """`(rule, label)` for the page, or None.
+
+    The last page-label block wins: footers sit below headers, and a running header
+    repeating the document number is the more common false positive.
+    """
     labels = [b for b in page_blocks if b.type is BlockType.PAGE_LABEL]
-    return labels[-1].attrs.get("label") if labels else None
+    if not labels:
+        return None
+    winner = labels[-1]
+    return (winner.attrs.get("rule", "bare_number"), winner.attrs.get("label", ""))

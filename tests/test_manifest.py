@@ -156,3 +156,52 @@ def test_classification_below_threshold_is_flagged_not_guessed(store, pack):
 
     assert len(unknown) == 1  # the image-only page
     assert unknown[0].class_confidence < pack.min_class_confidence
+
+
+def test_noise_with_a_text_layer_is_illegible_not_legible(pack):
+    """A scan arrives already OCR'd by whoever made it, and that pass can fail while still
+    emitting characters. Counting characters cannot tell noise from prose, and the gate is
+    the only thing between noise and a model that will fluently invent French clinical
+    bullets from it (§8.5)."""
+    from alie.manifest.legibility import assess
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    def block(text, i=0):
+        return Block(
+            id=f"b{i}", bundle_id="bun", pdf_index=1, type=BlockType.PARAGRAPH, text=text,
+            bbox=BBox(0, 0, 100, 10), source=BlockSource.TEXT_LAYER, confidence=1.0, order=i,
+        )
+
+    # Real text taken from the reference bundle's failed OCR pass.
+    noise = [block("\rLllll\{vÊ tet-ttttr{trE ?ù o4.loÀ) l/*,/ ffik *kffi'", 0)]
+    assert assess(noise, 1).level is Legibility.ILLEGIBLE
+    assert assess(noise, 1).gated_from_model
+
+    prose = [block("Le travailleur présente une entorse lombaire persistante", 0)]
+    assert assess(prose, 1).level is Legibility.LEGIBLE
+
+
+def test_an_unreadable_page_does_not_extend_the_document_before_it(pack):
+    """Physical adjacency alone merged 32 unreadable pages of the reference bundle into
+    one confident, wrong unit. You cannot know an unreadable page continues the document
+    before it (§3.4)."""
+    from alie.manifest.boundaries import group_pages
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    def page(idx, text, kind=BlockType.PARAGRAPH):
+        return [
+            Block(id=f"b{idx}", bundle_id="bun", pdf_index=idx, type=kind, text=text,
+                  bbox=BBox(0, 200, 300, 212), source=BlockSource.TEXT_LAYER,
+                  confidence=1.0, order=0)
+        ]
+
+    pages = {
+        1: page(1, "Note de consultation du travailleur ce matin"),
+        2: page(2, "\rLllll\{vÊ tet-ttttr{trE ?ù o4.loÀ)"),
+        3: page(3, "Suite de la note et des observations cliniques"),
+    }
+    groups, signals = group_pages(pages, {i: 792.0 for i in pages}, pack)
+
+    assert not signals[2].readable
+    assert [2] in groups
+    assert not any(len(g) > 1 and 2 in g for g in groups)

@@ -103,3 +103,49 @@ def test_fixture_pdfs_exist_in_repo():
         for filename in spec["bundles"].values():
             assert (root / name / filename).exists()
     assert not (root / "gold-cnesst").exists()
+
+
+# --------------------------------------------------------- printed-label confirmation
+
+
+def test_year_in_a_footer_is_not_a_page_label():
+    """Medico-legal footers carry birth years. The reference bundle prints `1937` on four
+    pages; citing `p. 1937` would be visibly wrong to the firm (§8.1)."""
+    from alie.parse import pagelabel
+
+    confirmed = pagelabel.confirm_bare_labels(
+        {1: ("bare_number", "1937"), 2: ("bare_number", "44")}
+    )
+    assert 1 not in confirmed
+    assert confirmed[2] == "44"
+
+
+def test_isolated_bare_number_is_kept():
+    """`Clinique mère et monde` prints `44` on a sheet whose neighbours print nothing, and
+    the answer key cites `p. 44`. Dropping it to be safe loses the case the field exists
+    for (§8.1)."""
+    from alie.parse import pagelabel
+
+    assert pagelabel.confirm_bare_labels({7: ("bare_number", "44")}) == {7: "44"}
+
+
+def test_large_recurring_number_is_a_reference_not_a_page():
+    from alie.parse import pagelabel
+
+    labels = {i: ("bare_number", "780") for i in range(1, 5)}
+    assert pagelabel.confirm_bare_labels(labels) == {}
+
+
+def test_small_numbers_may_repeat_across_documents():
+    """Every two-page fax has a page `2`."""
+    from alie.parse import pagelabel
+
+    labels = {1: ("bare_number", "2"), 5: ("bare_number", "2"), 9: ("bare_number", "2")}
+    assert len(pagelabel.confirm_bare_labels(labels)) == 3
+
+
+def test_explicit_labels_are_never_second_guessed():
+    from alie.parse import pagelabel
+
+    labels = {1: ("page_x_of_y", "1937"), 2: ("page_n", "780")}
+    assert pagelabel.confirm_bare_labels(labels) == {1: "1937", 2: "780"}

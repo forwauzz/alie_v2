@@ -16,12 +16,17 @@ from dataclasses import dataclass
 
 from ..models import Block, BlockType
 from ..packs import Pack
+from ..parse.textquality import word_likeness
 
 #: A page starts a new unit at or above this score.
 START_THRESHOLD = 0.5
 
 #: Fraction of page height counted as "near the top" for heading signals.
 TOP_BAND = 0.4
+
+#: Word-likeness below which a page's text layer is treated as noise for the purpose of
+#: grouping. Matches the legibility gate's illegible threshold.
+READABLE_QUALITY = 0.35
 
 FORM_SERIAL = re.compile(r"\bformulaire\s*n?[°o]?\s*(\d{3,5})\b", re.IGNORECASE)
 SERIAL_WITH_REVISION = re.compile(r"\b(\d{4})\s*\(\s*(\d{4}-\d{2})\s*\)")
@@ -42,6 +47,9 @@ class PageSignals:
     revision: str | None
     author: str | None
     empty: bool
+    #: False when the page's text layer is noise. An unreadable page cannot be known to
+    #: continue the document before it.
+    readable: bool = True
 
 
 def _class_heading_patterns(pack: Pack) -> list[re.Pattern[str]]:
@@ -85,7 +93,9 @@ def signals_for_page(
 ) -> PageSignals:
     pdf_index = blocks[0].pdf_index if blocks else 0
     if not blocks:
-        return PageSignals(pdf_index, True, 1.0, ("blank page",), None, None, None, None, True)
+        return PageSignals(
+            pdf_index, True, 1.0, ("blank page",), None, None, None, None, True, readable=False
+        )
 
     score = 0.0
     reasons: list[str] = []
@@ -111,9 +121,14 @@ def signals_for_page(
             score -= 0.7
             reasons.append(f"printed label continues a document ({k} de {n})")
 
+    quality = word_likeness(" ".join(b.text for b in blocks))
+    readable = quality >= READABLE_QUALITY
+    if not readable:
+        reasons.append(f"text layer is {quality:.0%} word-like")
+
     return PageSignals(
         pdf_index=pdf_index,
-        starts=score >= START_THRESHOLD,
+        starts=score >= START_THRESHOLD or not readable,
         score=score,
         reasons=tuple(reasons),
         label_position=position,
@@ -121,6 +136,7 @@ def signals_for_page(
         revision=revision,
         author=_author(blocks),
         empty=False,
+        readable=readable,
     )
 
 
@@ -152,11 +168,21 @@ def _continues(signals: dict[int, PageSignals], previous: int | None, idx: int) 
     the preceding sheet — a consult note interrupted by an IRM resumes after it. When the
     labels do not chain, the page opens its own fragment and the re-join pass finds its
     real host (§8.3).
+
+    Legibility gates this too. On the 139-page reference bundle a third of pages carry a
+    failed OCR pass, and physical adjacency alone merged 32 of them into one confident,
+    wrong 32-page "unit". You cannot know an unreadable page continues the document before
+    it, so it does not join one — it becomes its own unit with an illegible status, which
+    is the truthful representation (§3.4).
     """
     if previous is None:
         return False
     here, before = signals[idx], signals.get(previous)
-    if here.label_position is None or before is None or before.label_position is None:
+    if before is None:
+        return False
+    if not here.readable or not before.readable:
+        return False
+    if here.label_position is None or before.label_position is None:
         return True  # no label evidence either way; fall back to physical adjacency
     return (
         before.label_position[1] == here.label_position[1]

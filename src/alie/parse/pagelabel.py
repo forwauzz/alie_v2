@@ -33,8 +33,67 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "page_n",
         re.compile(rf"^{_WS}p(?:age)?\.{_WS}(?P<label>\d{{1,4}}){_WS}$", re.IGNORECASE),
     ),
+    # A bare number in the footer band is only a *candidate*. Real bundles put reference
+    # numbers, birth years and dossier ids there too — the reference bundle yields `1937`,
+    # `780` and `140`, none of which are page numbers. Rendering `p. 1937` into a citation
+    # would be visibly wrong to the firm, so these are confirmed at bundle level by
+    # `confirm_bare_labels` before anything relies on them.
     ("bare_number", re.compile(rf"^{_WS}(?P<label>\d{{1,4}}){_WS}$")),
 )
+
+#: Rules whose match is self-evidencing: `p. 2 de 4` says what it is.
+TRUSTED_RULES = frozenset({"page_x_of_y", "page_n"})
+
+#: A four-digit number in this span is a year, not a page. Medico-legal footers carry
+#: birth years and claim years; the reference bundle prints `1937` on four separate pages.
+YEAR_RANGE = (1900, 2100)
+
+#: Above this, a value repeating across pages is a reference number rather than a page
+#: count. Small numbers legitimately repeat — every two-page fax has a page `2`.
+RECURRING_MIN = 20
+
+
+def confirm_bare_labels(labels: dict[int, tuple[str, str]]) -> dict[int, str]:
+    """Decide which bare footer numbers are really page labels.
+
+    Input maps `pdf_index -> (rule, label)`. This runs once per bundle because the
+    evidence is cross-page: the same number on many sheets is a masthead, not a counter.
+
+    Two rejections, both from what real bundles actually print:
+
+    - **Years.** `1937` in a footer is a date of birth. Citing `p. 1937` would be visibly
+      wrong to the firm.
+    - **Large recurring numbers.** A dossier or reference number repeats unchanged; a page
+      number does not.
+
+    An isolated three-digit number is *kept*. It cannot be told apart from a genuine EMR
+    page number without more context, and the §8.1 case the whole field exists for is
+    exactly that: `Clinique mère et monde` prints `44` on a sheet whose neighbours print
+    nothing, and the answer key cites `p. 44`. Dropping it to be safe would lose the one
+    example that proves the point.
+
+    A page with no confirmed label is not an error — display falls back to the pdf index
+    and the row is flagged (§8.1).
+    """
+    bare = {i: int(v) for i, (rule, v) in labels.items() if rule == "bare_number" and v.isdigit()}
+    occurrences: dict[int, int] = {}
+    for value in bare.values():
+        occurrences[value] = occurrences.get(value, 0) + 1
+
+    out: dict[int, str] = {}
+    for index, (rule, text) in labels.items():
+        if rule in TRUSTED_RULES:
+            out[index] = text
+            continue
+        value = bare.get(index)
+        if value is None:
+            continue
+        if YEAR_RANGE[0] <= value <= YEAR_RANGE[1]:
+            continue
+        if value > RECURRING_MIN and occurrences.get(value, 0) > 1:
+            continue
+        out[index] = text
+    return out
 
 
 def match(text: str) -> tuple[str, str] | None:
