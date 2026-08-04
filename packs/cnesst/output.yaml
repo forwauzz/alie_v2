@@ -115,6 +115,21 @@ field_lines:
   bareme: "Barème {code} — {pct} %"
   bareme_with_prior: "Barème {code} — {pct} % ({prior_pct} % sur antérieur)"
 
+  # §8.6 fields read by cue. `trajectory` renders her sentence verbatim with no prefix —
+  # the wording is the evidence, and a label in front of it would be the engine speaking.
+  trajectory: "{value}"
+  confounder: "Facteur confondant : {value}"
+  intercurrent_event: "Événement intercurrent : {value}"
+  claimed_but_unrated: "Séquelle alléguée non retenue au barème : {value}"
+  procured_by: "Rapport obtenu : {value}"
+
+# Stored for querying, never printed. The trajectory enum sits beside the sentence it was
+# derived from; rendering both prints the finding twice, once in her words and once in the
+# engine's (§8.6).
+index_fields:
+  - trajectory.enum
+  - evidence_weight
+
 # How a first-class state is worded in the deliverable. An internal state id must never
 # reach a document the firm hands to opposing counsel — the same rule as `unknown_label`.
 #
@@ -136,3 +151,11 @@ state_labels:
     non: "non"
     trop_tot: "trop tôt pour se prononcer"
     absent: "non renseignée au rapport"
+  procured_by:
+    treating: "par le médecin traitant"
+    insurer_expert: "à la demande de la partie adverse"
+  trajectory.enum:
+    amelioration: "amélioration"
+    deterioration: "détérioration"
+    stable: "stationnaire"
+    unclassified: "évolution décrite, non classée"

@@ -1,0 +1,32 @@
+{
+  "bundles": {
+    "Médical": "Medical.pdf"
+  },
+  "units": [
+    {
+      "cue_fields": {
+        "confounder": "present",
+        "evidence_weight": "contestable",
+        "intercurrent_event": "present",
+        "procured_by": "insurer_expert",
+        "trajectory.enum": "amelioration"
+      },
+      "pages": [
+        1
+      ],
+      "row_date": "2023-09-06"
+    },
+    {
+      "cue_fields": {
+        "confounder": "absent",
+        "intercurrent_event": "absent",
+        "procured_by": "absent",
+        "trajectory": "absent"
+      },
+      "pages": [
+        2
+      ],
+      "row_date": "2023-10-02"
+    }
+  ]
+}

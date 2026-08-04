@@ -1,0 +1,96 @@
+# Required fields that are not template-bound (PRD §8.6).
+#
+# The template registry reads known coordinates on known forms. These fields appear in
+# free-text reports — an expertise discusses a confounder and carries no form serial — so
+# they are read by cue from any document, whatever its class.
+#
+# Deterministic first. Every field here is a rule the engine can evaluate and cite; 4b
+# fills only what these leave open (§4.2). Cues are whitespace-tolerant and `\b`-anchored,
+# because `n[ée] le` inside `Signé le` is the mistake this project has already made once.
+
+fields:
+  # Free-text trajectory **plus** a derived enum. Never overwrite her wording (§8.6): the
+  # verbatim span is stored, and the enum is a second record derived from it. Storing only
+  # the enum throws away the sentence a tribunal would want to read.
+  - id: trajectory
+    kind: free_text_with_enum
+    tag: INF-H
+    cues:
+      - "\\b[ée]volution\\b"
+      - "\\bam[ée]lioration\\b"
+      - "\\bd[ée]t[ée]rioration\\b"
+      - "\\bstatu\\s*quo\\b"
+    enum:
+      amelioration:
+        - "\\bam[ée]lior"
+        - "\\bprogr[èe]s\\b"
+        - "\\ben\\s*voie\\s*de\\s*r[ée]solution\\b"
+      deterioration:
+        - "\\bd[ée]t[ée]rior"
+        - "\\baggrav"
+        - "\\bempire\\b"
+      stable:
+        - "\\bstatu\\s*quo\\b"
+        - "\\bstationnaire\\b"
+        - "\\binchang[ée]"
+
+  # "improved, but confounded by X"; "disabled, but by a different cause" (§8.6). The
+  # clause that makes a favourable finding arguable is the one most worth citing.
+  - id: confounder
+    kind: cue_span
+    tag: INF-H
+    cues:
+      # `confondue par` is the form that actually appears — the feminine agrees with
+      # `l'amélioration`. A cue written for one gender matches none of the real sentences.
+      - "\\bconfondu[e]?[s]?\\s*par\\b"
+      - "\\battribuable\\s*[àa]\\s*une\\s*autre\\s*cause\\b"
+      - "\\ben\\s*raison\\s*d.une\\s*condition\\s*personnelle\\b"
+      - "\\bcondition\\s*personnelle\\s*pr[ée]existante\\b"
+
+  # Dated and attributed (§8.6). A new accident inside the claim window changes what every
+  # later report is evidence of.
+  - id: intercurrent_event
+    kind: cue_span
+    tag: INF-H
+    cues:
+      - "\\b[ée]v[ée]nement\\s*intercurrent\\b"
+      - "\\bnouvel\\s*accident\\b"
+      - "\\bnouvelle\\s*l[ée]sion\\b"
+      - "\\brechute\\s*,?\\s*r[ée]cidive\\s*ou\\s*aggravation\\b"
+      - "\\bRRA\\b"
+
+  # Sequelae argued but absent from the official rating (§8.6). Derived by comparing what
+  # the text claims against the barème rows 4a read — a claim with no code is exactly what
+  # a representative needs to find.
+  - id: claimed_but_unrated
+    kind: derived_claimed_sequelae
+    tag: INF-L
+    cues:
+      - "\\bs[ée]quelle[s]?\\b"
+      - "\\blimitation[s]?\\s*fonctionnelle[s]?\\b"
+      - "\\batteinte\\b"
+
+  # Who obtained the report. IVAC and SAAQ have no binding-treating-opinion tier, so the
+  # engine must not assume one exists — the weight is the regime's answer, not a constant
+  # (§8.6). Under CNESST the treating physician's opinion binds unless displaced.
+  - id: procured_by
+    kind: classify
+    tag: INF-H
+    values:
+      insurer_expert:
+        - "\\bexpertise\\s*m[ée]dicale\\b"
+        - "\\b[àa]\\s*la\\s*demande\\s*de\\s*l.employeur\\b"
+        - "\\bbureau\\s*d.[ée]valuation\\s*m[ée]dicale\\b"
+        - "\\bexamen\\s*par\\s*le\\s*m[ée]decin\\s*d[ée]sign[ée]\\b"
+      treating:
+        - "\\bm[ée]decin\\s*traitant\\b"
+        - "\\bm[ée]decin\\s*de\\s*famille\\b"
+        - "\\bmédecin\\s*qui\\s*a\\s*charge\\b"
+
+# What a procurement source is worth, per regime. Declared because it differs: under
+# CNESST the treating physician's opinion has a binding tier; under IVAC and SAAQ it does
+# not, and an engine that hardcodes the CNESST answer is wrong on two of three regimes.
+evidence_weight:
+  treating: binding_unless_displaced
+  insurer_expert: contestable
+  unknown: unweighted

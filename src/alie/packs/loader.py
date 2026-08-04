@@ -7,6 +7,7 @@ forking a pack.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -16,7 +17,12 @@ import yaml
 
 from ..config import SETTINGS
 
-_FILES = ("pack", "classes", "dates", "filters", "output")
+_FILES = ("pack", "classes", "dates", "filters", "fields", "output")
+
+#: `confounder.cont1` — the tail of a sentence that ran past its own block. Each part keeps
+#: its own span, because a record carries one span and the citation invariant is per string
+#: (§8.1).
+_CONTINUATION = re.compile(r"\.cont\d+$")
 
 
 @dataclass(frozen=True)
@@ -28,6 +34,7 @@ class Pack:
     classes: dict[str, Any] = field(default_factory=dict)
     dates: dict[str, Any] = field(default_factory=dict)
     filters: dict[str, Any] = field(default_factory=dict)
+    fields: dict[str, Any] = field(default_factory=dict)
     output: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -51,8 +58,22 @@ class Pack:
     def field_line(self, field: str) -> str | None:
         """Line template for an extracted field. Code renders the row; the model never
         writes one (§3.2), and the wording is the pack's business, not the engine's."""
+        # The tail of a sentence that ran past its block. It is the same finding continued,
+        # so it must not re-announce its label — "Facteur confondant :" twice reads as two
+        # confounders where the document states one.
+        if _CONTINUATION.search(field):
+            return self.output.get("continuation_line", "{value}")
         base = field.split(".")[0]
         return self.output.get("field_lines", {}).get(base)
+
+    def is_index_field(self, field: str) -> bool:
+        """A field stored for querying, not for the chronology.
+
+        The trajectory enum sits beside the sentence it was derived from; rendering both
+        prints the finding twice, once in her words and once in the engine's. The enum
+        stays in the record store where a query can reach it (§8.6).
+        """
+        return field in set(self.output.get("index_fields", []))
 
     def state_label(self, field: str, state: str) -> str:
         """How a first-class state is worded in the deliverable.
@@ -89,6 +110,20 @@ class Pack:
         """Classes the pack calls administrative. Used by the zero-content filter, which
         must never fire on a clinical document (§8.5)."""
         return {c["id"] for c in self.class_list if c.get("is_admin")}
+
+    @property
+    def cue_fields(self) -> list[dict[str, Any]]:
+        """§8.6 fields read by cue from any document, template or not."""
+        return self.fields.get("fields", [])
+
+    def evidence_weight(self, procured_by: str) -> str | None:
+        """What a procurement source is worth **under this regime**.
+
+        IVAC and SAAQ have no binding-treating-opinion tier (§8.6), so this is the pack's
+        answer and not a constant — an engine that hardcodes the CNESST rule is wrong on
+        two of three regimes.
+        """
+        return self.fields.get("evidence_weight", {}).get(procured_by)
 
     @property
     def first_class_values(self) -> dict[str, Any]:

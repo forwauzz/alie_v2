@@ -7,6 +7,7 @@ CNESST framework's Appendix B.
 | `hard`  | illegible, undated, ambiguous date, orphan page, OCR damage     |
 | `dupes` | two bundles: refax, byte-identical pair, later-visit pair       |
 | `admin` | filters: billing, consent, zero-content admin, clinical control |
+| `fields`| §8.6 by cue: trajectory, confounder, intercurrent, procured_by  |
 
 `gold-cnesst` is not in the repo; it points at real files (§13.3).
 """
@@ -318,6 +319,58 @@ def _admin() -> list[Page]:
     ]
 
 
+def _fields() -> list[Page]:
+    """§8.6 fields that no template covers: an expertise carries a confounder discussion,
+    a trajectory sentence and an intercurrent event, and has no form serial at all.
+
+    Page 2 is the control: a clinical note with none of these cues, where every §8.6 field
+    must come back `absent` rather than picking up a nearby sentence.
+    """
+    return [
+        Page(
+            printed_label="1",
+            lines=[
+                "# EXPERTISE MÉDICALE",
+                "Examen par le médecin désigné, à la demande de l'employeur",
+                "Date de l'examen: 2023-09-06",
+                "",
+                "## ÉVOLUTION",
+                "Amélioration de la mobilité lombaire depuis la dernière évaluation.",
+                "L'amélioration est toutefois confondue par une condition personnelle",
+                "préexistante de spondylarthrose étagée.",
+                "",
+                "## ANTÉCÉDENTS RÉCENTS",
+                "Un nouvel accident est survenu le 2023-05-14, chute à domicile.",
+                "",
+                "## SÉQUELLES",
+                "Le travailleur allègue des séquelles de l'épaule droite non retenues.",
+                "",
+                "## BILAN DES SÉQUELLES",
+                "Code 102 383    2 %",
+                "",
+                SIG + "Dr Gilles Maurais, orthopédiste",
+            ],
+        ),
+        # The control: none of the cues. Every §8.6 field must read `absent`.
+        Page(
+            printed_label="2",
+            lines=[
+                "# NOTE DE CONSULTATION",
+                "Clinique du Nord",
+                "Date de la visite: 2023-10-02",
+                "",
+                "## SUBJECTIF",
+                "Douleur lombaire à 4/10, sommeil correct.",
+                "",
+                "## PLAN",
+                "Poursuite du programme d'exercices.",
+                "",
+                SIG + "Dre Marie Lavoie, méd. de famille",
+            ],
+        ),
+    ]
+
+
 EXPECTED: dict[str, dict] = {
     "tiny": {
         "bundles": {"Médical": "Medical.pdf"},
@@ -355,6 +408,25 @@ EXPECTED: dict[str, dict] = {
             },
         ],
     },
+    "fields": {
+        "bundles": {"Médical": "Medical.pdf"},
+        "units": [
+            {"pages": [1], "row_date": "2023-09-06", "cue_fields": {
+                "trajectory.enum": "amelioration",
+                "confounder": "present",
+                "intercurrent_event": "present",
+                "procured_by": "insurer_expert",
+                "evidence_weight": "contestable",
+            }},
+            # The control: every §8.6 field absent.
+            {"pages": [2], "row_date": "2023-10-02", "cue_fields": {
+                "trajectory": "absent",
+                "confounder": "absent",
+                "intercurrent_event": "absent",
+                "procured_by": "absent",
+            }},
+        ],
+    },
     "dupes": {
         "bundles": {"Médical": "Medical.pdf", "CHUM": "CHUM.pdf"},
         "pairs": [
@@ -369,6 +441,7 @@ _BUILDERS = {
     ("tiny", "Medical.pdf"): _tiny,
     ("hard", "Medical.pdf"): _hard,
     ("admin", "Medical.pdf"): _admin,
+    ("fields", "Medical.pdf"): _fields,
     ("dupes", "Medical.pdf"): _dupes_medical,
     ("dupes", "CHUM.pdf"): _dupes_chum,
 }

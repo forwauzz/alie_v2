@@ -215,7 +215,11 @@ def _bullets(
     bullets: list[Bullet] = []
     for unit in group:
         page_labels = labels.get(unit.bundle_id, {})
-        structured = [r for r in records_for_unit(conn, unit.id) if not r.derived and r.value]
+        structured = [
+            r
+            for r in records_for_unit(conn, unit.id)
+            if not r.derived and r.value and not pack.is_index_field(r.field)
+        ]
         blocks = blocks_store.for_pages(conn, unit.bundle_id, unit.pages)
         by_id = {b.id: b for b in blocks}
 

@@ -14,6 +14,7 @@ import sqlite3
 from typing import Any
 
 from .stages import assemble, extract, manifest_build, parse, render, structured
+from .stages import fields as fields_stage
 from .stores import audit, cases, manifest, runs
 from .stores import records as records_store
 from .stores import rows as rows_store
@@ -102,6 +103,12 @@ def handle(conn: sqlite3.Connection, job: dict, flags: dict[str, Any]) -> dict:
             result = structured.run_unit(conn, payload["unit_id"], run_id=run_id)
             resolved = records_store.fields_for_unit(conn, payload["unit_id"], stage="4a")
             detail |= {"template": result.template, "fields": result.fields_read}
+
+        # §8.6 fields that no template covers, read by cue from any document. Runs whether
+        # or not a template matched — an expertise discusses a confounder and carries no
+        # form serial.
+        cued = fields_stage.run_unit(conn, payload["unit_id"], run_id=run_id)
+        detail |= {"cue_fields": cued.read, "cue_absent": cued.absent}
 
         if flags.get("extract.model"):
             extracted = extract.run_unit(
