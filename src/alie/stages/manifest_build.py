@@ -14,7 +14,16 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from ..manifest import boundaries, classify, datefind, dateselect, filters, legibility, rejoin
+from ..manifest import (
+    boundaries,
+    classify,
+    datefind,
+    dateselect,
+    filters,
+    legibility,
+    rejoin,
+    screen,
+)
 from ..models import Block, Legibility, ReportUnit, RowStatus, UnitKind
 from ..packs import Pack
 from ..packs import load as load_pack
@@ -34,6 +43,9 @@ class ManifestResult:
     illegible: int
     unclassified: int
     needs_fallback: int
+    #: Units whose regime differs from the case default. The `screen.per_unit_regime`
+    #: metric verbatim: is mixed-regime real, or a one-off (§9.2)?
+    off_regime: int = 0
     #: Units a filter rule removed from the deliverable. They remain in the manifest with
     #: `excluded_by` naming the rule (§3.4).
     excluded: int = 0
@@ -101,7 +113,8 @@ def run(
 
     manifest.delete_units_for_bundle(conn, bundle_id)
     counts = dict(
-        undated=0, ambiguous=0, illegible=0, unclassified=0, fallback=0, split=0, excluded=0
+        undated=0, ambiguous=0, illegible=0, unclassified=0, fallback=0, split=0,
+        excluded=0, off_regime=0
     )
     unavailable_filters: set[str] = set()
 
@@ -109,7 +122,7 @@ def run(
         unit_blocks = [b for p in pages for b in by_page.get(p, [])]
         unit = _build_unit(
             conn, bundle, case, pack, pages, unit_blocks, signals, labels,
-            anchors, role_for, producer, run_id,
+            anchors, role_for, producer, run_id, flags,
         )
         _tally(unit, counts)
         unavailable_filters.update(
@@ -128,6 +141,7 @@ def run(
         needs_fallback=counts["fallback"],
         missing_sheets=tuple(gaps),
         excluded=counts["excluded"],
+        off_regime=counts["off_regime"],
         filters_unavailable=tuple(sorted(unavailable_filters)),
     )
     audit.record(
@@ -148,7 +162,7 @@ def run(
 
 def _build_unit(
     conn, bundle, case, pack: Pack, pages, unit_blocks, signals, labels,
-    anchors, role_for, producer, run_id,
+    anchors, role_for, producer, run_id, flags,
 ) -> ReportUnit:
     unit_id = _unit_id(bundle["id"], pages)
     page_signals = [signals[p] for p in pages if p in signals]
@@ -177,6 +191,18 @@ def _build_unit(
         doc_class=classification.doc_class, admin_classes=pack.admin_classes,
     )
 
+    # Regime is a property of the unit, not the case (§6.1). Off by default: its flag asks
+    # whether mixed-regime files are real or a one-off, and the metric is exactly the count
+    # this produces (§9.2).
+    regime = case["primary_pack"]
+    screened = None
+    if flags.get("screen.per_unit_regime"):
+        screened = screen.screen(
+            unit_id, unit_blocks,
+            default_pack=case["primary_pack"], form_serial=serial,
+        )
+        regime = screened.regime
+
     unit = ReportUnit(
         id=unit_id,
         bundle_id=bundle["id"],
@@ -185,7 +211,7 @@ def _build_unit(
         doc_class=classification.doc_class,
         class_confidence=classification.confidence,
         class_source=classification.source,
-        regime=case["primary_pack"],
+        regime=regime,
         legibility=assessment.level,
         author=author,
         form_serial=serial,
@@ -203,7 +229,18 @@ def _build_unit(
         # Filters the engine could not judge because the feature they depend on is not
         # built. Recorded per unit so "0 excluded by rule" is never mistaken for "every
         # rule ran and none fired".
-        | ({"filters_unavailable": ",".join(unavailable)} if unavailable else {}),
+        | ({"filters_unavailable": ",".join(unavailable)} if unavailable else {})
+        # The override is only useful with its evidence: the why-panel has to show what
+        # the unit said to earn a regime other than the case's (§7.1).
+        | (
+            {
+                "regime_source": "screened" if screened.differs else "case_default",
+                "regime_confidence": f"{screened.confidence:.2f}",
+                "regime_matched": ";".join(screened.matched[:4]),
+            }
+            if screened
+            else {}
+        ),
     )
     unit = _apply_corrections(conn, unit, row_date)
 
@@ -269,3 +306,5 @@ def _tally(unit: ReportUnit, counts: dict[str, int]) -> None:
         counts["fallback"] += 1
     if unit.excluded_by:
         counts["excluded"] += 1
+    if unit.attrs.get("regime_source") == "screened":
+        counts["off_regime"] += 1

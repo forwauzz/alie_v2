@@ -1,0 +1,63 @@
+# Output shape (PRD §8.5). Wording is the pack's business, not the engine's.
+
+columns:
+  - header: Date
+  - header: Document
+  - header: Contenu
+
+rows:
+  undated_heading: "SANS DATE — {n} documents à dater"
+  removed_heading: "RETIRÉ PAR RÈGLE — {n} document(s), conservés au dossier"
+
+title_line:
+  author_suffix: " — {author}"
+
+row_content:
+  suppress:
+    - "^\\s*confidentiel"
+    - "t[ée]l[ée]phone\\s*\\+?\\d"
+  repeat_is_furniture: 2
+
+field_lines:
+  # `stabilisation` here is CNESST's `consolidation`; IPNP here is APIPP there (§6). Same
+  # concept, different name — a chronology using the wrong one reads as though the
+  # paralegal does not know the regime.
+  ipnp: "Atteinte permanente : {value}"
+  stabilisation: "Stabilisation : {value}"
+  limitations_fonctionnelles: "Limitations fonctionnelles : {value}"
+  diagnostic: "Diagnostic : {value}"
+  trajectory: "{value}"
+  confounder: "Facteur confondant : {value}"
+  intercurrent_event: "Événement intercurrent : {value}"
+  procured_by: "Rapport obtenu : {value}"
+
+continuation_line: "{value}"
+
+index_fields:
+  - trajectory.enum
+  - evidence_weight
+
+state_labels:
+  ipnp:
+    rated: "oui"
+    aucune: "aucune"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignée au rapport"
+  stabilisation:
+    oui: "oui"
+    non: "non"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignée au rapport"
+  limitations_fonctionnelles:
+    rated: "oui"
+    aucune: "aucune"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignées au rapport"
+  procured_by:
+    treating: "par le médecin traitant"
+    insurer_expert: "à la demande de la SAAQ"
+  trajectory.enum:
+    amelioration: "amélioration"
+    deterioration: "détérioration"
+    stable: "stationnaire"
+    unclassified: "évolution décrite, non classée"

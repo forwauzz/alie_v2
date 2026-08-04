@@ -1,0 +1,59 @@
+# §8.6 fields read by cue. Shares CNESST's shape because the clinical language is the same
+# — what differs between regimes is the milestone vocabulary and the weight of an opinion,
+# not how a clinician describes improvement.
+
+fields:
+  - id: trajectory
+    kind: free_text_with_enum
+    tag: INF-H
+    cues_from_enum: true
+    enum:
+      amelioration:
+        - "\\bam[ée]lior"
+        - "\\bprogr[èe]s\\b"
+        - "\\bgu[ée]rison\\b"
+      deterioration:
+        - "\\bd[ée]t[ée]rior"
+        - "\\baggrav"
+        - "\\br[ée]gression\\b"
+      stable:
+        - "\\bstatu\\s*quo\\b"
+        - "\\bstationnaire\\b"
+        - "\\binchang[ée]"
+        - "\\bplateau\\b"
+
+  - id: confounder
+    kind: cue_span
+    tag: INF-H
+    cues:
+      - "\\bconfondu[e]?[s]?\\s*par\\b"
+      - "\\bcondition\\s*personnelle\\s*pr[ée]existante\\b"
+      - "\\battribuable\\s*[àa]\\s*une\\s*autre\\s*cause\\b"
+
+  - id: intercurrent_event
+    kind: cue_span
+    tag: INF-H
+    cues:
+      - "\\b[ée]v[ée]nement\\s*intercurrent\\b"
+      - "\\bnouvel\\s*accident\\b"
+      - "\\bnouvelle\\s*l[ée]sion\\b"
+
+  - id: procured_by
+    kind: classify
+    tag: INF-H
+    values:
+      insurer_expert:
+        - "\\b[àa]\\s*la\\s*demande\\s*de\\s*la\\s*SAAQ\\b"
+        - "\\bexpertise\\s*m[ée]dicale\\b"
+        - "m[ée]decin\\s*d[ée]sign[ée]\\s*par\\s*la\\s*SAAQ"
+      treating:
+        - "\\bm[ée]decin\\s*traitant\\b"
+        - "\\bm[ée]decin\\s*de\\s*famille\\b"
+
+# SAAQ has **no binding-treating-opinion tier** (§8.6). Under CNESST the treating
+# physician's opinion binds unless displaced; here it does not, and an engine that carried
+# the CNESST answer across would overstate every treating report in the file.
+evidence_weight:
+  treating: contestable
+  insurer_expert: contestable
+  unknown: unweighted

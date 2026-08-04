@@ -16,6 +16,31 @@ version: "0.1.0"
 name: Commission des normes, de l'équité, de la santé et de la sécurité du travail
 language: fr-CA
 
+# How a document says it belongs to this regime (§6.1). The screener scores every unit
+# against every installed pack's `identity` block; the engine holds no regime knowledge and
+# has no `if regime == ...` anywhere, so adding a regime is authoring a pack.
+#
+# Regime is a property of the *unit*, not the case: the IVAC gold file contains CNESST
+# documents, because the victim was assaulted on his own logging property and LATMP takes
+# precedence. Case-level regime would read those units with the wrong vocabulary and the
+# wrong impairment math.
+identity:
+  # A form serial is printed by the issuing body, not typed by a clinician, so it outranks
+  # any wording. These are CNESST's own forms.
+  serials: ["1918", "2064", "2118", "2923"]
+  strong:
+    - "commission\\s*des\\s*normes,?\\s*de\\s*l.[ée]quit[ée]"
+    - "\\bCNESST\\b"
+    - "\\bCSST\\b"
+    - "sant[ée]\\s*et\\s*(?:de\\s*la\\s*)?s[ée]curit[ée]\\s*du\\s*travail"
+    - "l[ée]sion\\s*professionnelle"
+    - "\\bLATMP\\b"
+  weak:
+    - "\\bconsolidation\\b"
+    - "\\bAPIPP\\b"
+    - "atteinte\\s*permanente\\s*[àa]\\s*l.int[ée]grit[ée]"
+    - "\\btravailleur\\b"
+
 # Vocabulary that is genuinely regime-specific. `consolidation` here is `stabilisation`
 # under SAAQ; APIPP here is IPNP there (§6).
 vocabulary:

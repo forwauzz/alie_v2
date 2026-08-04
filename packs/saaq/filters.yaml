@@ -1,0 +1,24 @@
+# Filters (PRD §6, §3.4). Nothing is dropped: a filtered unit reaches the manifest with
+# `excluded_by` naming the rule.
+
+unconditional:
+  - id: saaq.filter.billing
+    tag: KEY
+    classes: [administratif]
+    matches:
+      - "facture"
+      - "num[ée]ro\\s*de\\s*facturation"
+    reason: billing
+
+  - id: saaq.filter.consent
+    tag: KEY
+    matches:
+      - "formulaire\\s*de\\s*consentement"
+      - "autorisation\\s*de\\s*divulgation"
+    reason: consent
+
+conditional:
+  - id: saaq.filter.zero_content_admin
+    tag: INF-H
+    when: unit_has_no_clinical_content_and_class_is_admin
+    reason: zero_content_admin

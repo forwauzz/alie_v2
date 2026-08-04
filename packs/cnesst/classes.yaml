@@ -152,6 +152,31 @@ classes:
       - "suivi"
     confidence: 0.8
 
+  # A medico-legal expertise obtained by a party — bureau d'évaluation médicale, médecin
+  # désigné, or an opinion on the file. Case 1 holds three of these and the pack had no
+  # class for them, so they fell to `unknown` and their boundaries never broke: a 4-page
+  # expertise merged into whatever preceded it.
+  #
+  # This is also the class where `procured_by` and `evidence_weight` matter most (§8.6):
+  # under CNESST the treating physician's opinion binds unless displaced, and an expertise
+  # is the instrument that tries to displace it.
+  - id: expertise
+    label: Expertise médicale
+    tag: KEY
+    declares:
+      - "expertise\\s*m[ée]dicale"
+      - "opinion\\s*m[ée]dicale\\s*sur\\s*dossier"
+      - "bureau\\s*d.[ée]valuation\\s*m[ée]dicale"
+    headings:
+      - "expertise\\s*m[ée]dicale"
+      - "expertise\\s*(?:orthop[ée]dique|psychiatrique|neurologique)"
+      - "opinion\\s*m[ée]dicale"
+    body:
+      - "m[ée]decin\\s*d[ée]sign[ée]"
+      - "[àa]\\s*la\\s*demande\\s*de\\s*l.employeur"
+      - "\\bB\\.?E\\.?M\\.?\\b"
+    confidence: 0.9
+
   - id: certificat_medical
     label: Certificat médical
     tag: KEY

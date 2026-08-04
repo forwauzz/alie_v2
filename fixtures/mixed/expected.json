@@ -1,0 +1,30 @@
+{
+  "bundles": {
+    "Médical": "Medical.pdf"
+  },
+  "units": [
+    {
+      "class": "rapport_medical",
+      "pages": [
+        1
+      ],
+      "regime": "cnesst",
+      "row_date": "2022-04-02"
+    },
+    {
+      "pages": [
+        2
+      ],
+      "regime": "saaq",
+      "row_date": "2023-02-20"
+    },
+    {
+      "class": "note_consultation",
+      "pages": [
+        3
+      ],
+      "regime": "cnesst",
+      "row_date": "2023-05-08"
+    }
+  ]
+}

@@ -48,8 +48,14 @@ class Validation:
     """Whether a pack's first-class declarations and its readers actually agree."""
 
     unreadable: tuple[str, ...] = ()
-    """Declared first-class, but no template field or prompt field can produce it. A
-    declaration nothing reads is a promise the export cannot keep."""
+    """Declared first-class and *not* declared a gap, but no reader can produce it. A
+    promise the export cannot keep, and nobody wrote down that it could not."""
+
+    declared_gaps: tuple[str, ...] = ()
+    """Unreadable, and the pack says so. `[GAP]` is a first-class epistemic tag (§6.2):
+    a gap somebody wrote down is a decision, a gap nobody wrote down is a defect. SAAQ
+    declares `stabilisation` with no form catalogued to read it from — that is honest and
+    trackable; the same silence with no declaration would not be."""
 
     def __bool__(self) -> bool:
         return not self.unreadable
@@ -77,9 +83,19 @@ def readable_fields(pack: Pack) -> set[str]:
     return out
 
 
+def known_gaps(pack: Pack) -> set[str]:
+    """Fields the pack states it cannot read yet, and why. `[GAP]` (§6.2)."""
+    return set(pack.pack.get("known_gaps", {}))
+
+
 def validate(pack: Pack) -> Validation:
     """Check the pack against itself. Called at load time in dev and by the pack test."""
-    return Validation(unreadable=tuple(sorted(set(declared(pack)) - readable_fields(pack))))
+    missing = set(declared(pack)) - readable_fields(pack)
+    gaps = known_gaps(pack)
+    return Validation(
+        unreadable=tuple(sorted(missing - gaps)),
+        declared_gaps=tuple(sorted(missing & gaps)),
+    )
 
 
 def report(pack: Pack, values: dict[str, str | None]) -> list[FieldReport]:

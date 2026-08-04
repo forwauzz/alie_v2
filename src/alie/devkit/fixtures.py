@@ -8,6 +8,7 @@ CNESST framework's Appendix B.
 | `dupes` | two bundles: refax, byte-identical pair, later-visit pair       |
 | `admin` | filters: billing, consent, zero-content admin, clinical control |
 | `fields`| §8.6 by cue: trajectory, confounder, intercurrent, procured_by  |
+| `mixed` | a SAAQ report inside a CNESST case — regime is per unit (§6.1)   |
 
 `gold-cnesst` is not in the repo; it points at real files (§13.3).
 """
@@ -371,6 +372,65 @@ def _fields() -> list[Page]:
     ]
 
 
+def _mixed() -> list[Page]:
+    """Regime is a property of the unit, not the case (§6.1).
+
+    The IVAC gold file contains CNESST documents — the victim was a logger assaulted on his
+    own logging property, and LATMP takes precedence. This is the same shape: a CNESST case
+    whose bundle holds one SAAQ report, because the worker was also in a car accident.
+
+    Page 3 is the control: a CNESST document that must *not* be re-tagged. A screener that
+    moves regimes on weak evidence is worse than one that never moves them, because the
+    wrong vocabulary and the wrong impairment math arrive looking correct.
+    """
+    return [
+        Page(
+            printed_label="1",
+            lines=[
+                "# RAPPORT MÉDICAL",
+                "Commission des normes, de l'équité, de la santé et de la sécurité du travail",
+                "Formulaire 1918 (2011-11)",
+                "Date de l'événement: 2022-03-14",
+                "Date de l'examen: 2022-04-02",
+                "",
+                "## DIAGNOSTIC",
+                "Entorse lombaire d'origine professionnelle.",
+                "",
+                SIG + "Dre Marie Lavoie, méd. de famille",
+            ],
+        ),
+        # The SAAQ document. Names its own regime in its own words.
+        Page(
+            printed_label="2",
+            lines=[
+                "# EXPERTISE MÉDICALE",
+                "Société de l'assurance automobile du Québec",
+                "Dossier accident d'automobile",
+                "Date de l'examen: 2023-02-20",
+                "",
+                "## CONCLUSION",
+                "Stabilisation atteinte. IPNP évaluée à 3 %.",
+                "",
+                SIG + "Dr Gilles Maurais, orthopédiste",
+            ],
+        ),
+        # The control: plainly CNESST, must keep the case default.
+        Page(
+            printed_label="3",
+            lines=[
+                "# NOTE DE CONSULTATION",
+                "Clinique du Nord",
+                "Date de la visite: 2023-05-08",
+                "",
+                "## SUBJECTIF",
+                "Suivi de la lésion professionnelle, douleur lombaire résiduelle.",
+                "",
+                SIG + "Dre Marie Lavoie",
+            ],
+        ),
+    ]
+
+
 EXPECTED: dict[str, dict] = {
     "tiny": {
         "bundles": {"Médical": "Medical.pdf"},
@@ -427,6 +487,17 @@ EXPECTED: dict[str, dict] = {
             }},
         ],
     },
+    "mixed": {
+        "bundles": {"Médical": "Medical.pdf"},
+        "units": [
+            {"pages": [1], "class": "rapport_medical", "row_date": "2022-04-02",
+             "regime": "cnesst"},
+            # Regime is a property of the unit (§6.1).
+            {"pages": [2], "row_date": "2023-02-20", "regime": "saaq"},
+            {"pages": [3], "class": "note_consultation", "row_date": "2023-05-08",
+             "regime": "cnesst"},
+        ],
+    },
     "dupes": {
         "bundles": {"Médical": "Medical.pdf", "CHUM": "CHUM.pdf"},
         "pairs": [
@@ -442,6 +513,7 @@ _BUILDERS = {
     ("hard", "Medical.pdf"): _hard,
     ("admin", "Medical.pdf"): _admin,
     ("fields", "Medical.pdf"): _fields,
+    ("mixed", "Medical.pdf"): _mixed,
     ("dupes", "Medical.pdf"): _dupes_medical,
     ("dupes", "CHUM.pdf"): _dupes_chum,
 }

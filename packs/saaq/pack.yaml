@@ -1,0 +1,76 @@
+# SAAQ regime pack (PRD §6).
+#
+# Société de l'assurance automobile du Québec — the no-fault automobile regime under the
+# Loi sur l'assurance automobile.
+#
+# The engine contains no regime knowledge. This pack exists so a SAAQ document in a CNESST
+# file is read with SAAQ vocabulary rather than being silently translated (§6.1).
+#
+# **This pack is deliberately incomplete, and says where.** Rules carrying `[GAP]` are ones
+# the PRD's own open decisions (§15.7) leave unanswered and that need a practitioner:
+#
+#   - Does the paralegal write `consolidé` on SAAQ files out of CNESST habit? If she does,
+#     the milestone cue below is wrong to insist on `stabilisation`.
+#   - Consult date vs report date needs pinning — which one becomes the row date.
+#
+# Guessing either would produce confident wrong output, which is the failure this project
+# exists to avoid. They are marked, not invented.
+
+id: saaq
+version: "0.1.0"
+name: Société de l'assurance automobile du Québec
+language: fr-CA
+
+# How a SAAQ document announces itself (§6.1). Weighted the same way as CNESST's: a form
+# serial is printed by the issuing body and outranks any wording.
+identity:
+  serials: []          # [GAP] SAAQ form serials not yet catalogued from real files
+  strong:
+    - "soci[ée]t[ée]\\s*de\\s*l.assurance\\s*automobile"
+    - "\\bSAAQ\\b"
+    - "loi\\s*sur\\s*l.assurance\\s*automobile"
+    - "accident\\s*d.automobile"
+    - "\\bIPNP\\b"
+  weak:
+    - "\\bstabilisation\\b"
+    - "atteinte\\s*permanente\\s*[àa]\\s*l.int[ée]grit[ée]\\s*physique\\s*ou\\s*psychique"
+    - "\\bvictime\\b"
+
+# The regime-specific words. `consolidation` under CNESST is `stabilisation` here; APIPP
+# there is IPNP here (§6). Same concept, different name — and a chronology that uses the
+# wrong one reads as though the paralegal does not know the regime.
+vocabulary:
+  milestone: stabilisation
+  impairment: IPNP
+  impairment_long: atteinte permanente à l'intégrité physique ou psychique
+  limitations: limitations fonctionnelles
+
+# [GAP] (§6.2). These are non-negotiable fields the pack declares and currently cannot
+# read, because no SAAQ form has been catalogued into the template registry. Written down
+# rather than left silent: a gap somebody recorded is a decision, a gap nobody recorded is
+# a defect, and the pack test enforces exactly that distinction.
+#
+# Closing them means obtaining real SAAQ forms and authoring template entries, the same way
+# CNESST 1918 and 2064 were done.
+known_gaps:
+  stabilisation: "no SAAQ form catalogued; needs a real bundle to author a template from"
+  ipnp: "no SAAQ form catalogued; needs a real bundle to author a template from"
+  limitations_fonctionnelles: "no SAAQ form catalogued; needs a real bundle"
+
+first_class_values:
+  stabilisation:
+    tag: KEY
+    states: [oui, non, trop_tot, absent]
+  ipnp:
+    tag: KEY
+    states: [rated, aucune, trop_tot, absent]
+  limitations_fonctionnelles:
+    tag: KEY
+    states: [rated, aucune, trop_tot, absent]
+
+unit_toggles:
+  rapport_medical: true
+  note_consultation: true
+  rapport_imagerie: true
+  expertise: true
+  administratif: true

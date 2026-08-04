@@ -1,0 +1,85 @@
+# Date roles and the date rule table (PRD §8.4).
+#
+# A page does not have "a date". It has a set of dates, each with a role. The row date is
+# a selection over that set, governed by document class. The eligible/ineligible split is
+# an engine invariant, not a pack choice; what a pack supplies is the cue vocabulary for
+# its own forms.
+#
+# Every cue is `\b`-anchored. Without it, `n[ée]\s*le` matches inside `Signé le` and a
+# signature date is filed as a date of birth — structurally ineligible, and the row
+# silently loses its date.
+#
+# [GAP] §15.7 — consult date vs report date needs pinning on SAAQ files. The table below
+# prefers the exam, matching CNESST. A practitioner has to confirm that is the SAAQ rule
+# and not CNESST habit leaking across regimes.
+
+roles:
+  exam:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*l.?\\s*examen"
+      - "\\bexamin[ée]e?\\s+le\\b"
+  visit:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*visite"
+      - "\\bdate\\s*de\\s*(?:la\\s*)?consultation"
+  session:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*s[ée]ance"
+  surgery:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*chirurgie"
+      - "\\bop[ée]r[ée]e?\\s+le\\b"
+  signature:
+    tag: KEY
+    cues:
+      - "\\bsign[ée]e?\\s*(?:[ée]lectroniquement\\s*)?le\\b"
+  report:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*du\\s*rapport"
+  # Structurally ineligible for the row date; feeds the claim-event dimension (§8.4, §8.6).
+  event:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*l.?\\s*accident"
+      - "\\bdate\\s*de\\s*l.?\\s*[ée]v[ée]nement"
+  received:
+    tag: INF-H
+    cues:
+      - "\\bre[çc]u\\s+le\\b"
+  fax:
+    tag: INF-H
+    cues:
+      - "\\btransmis\\s+le\\b"
+  birth:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*naissance"
+      - "\\bn[ée]e?\\s+le\\b"
+
+rule_table:
+  rapport_medical:
+    tag: KEY
+    priority: [exam, visit, signature, report]
+  expertise:
+    tag: KEY
+    priority: [exam, report, signature]
+  note_consultation:
+    tag: KEY
+    priority: [visit, exam, signature]
+  rapport_imagerie:
+    tag: KEY
+    priority: [exam, report]
+  # An admin document is dated by whatever it states; it is filtered out of the chronology
+  # anyway, but a class with no entry falls to the `unknown` priority and would silently
+  # get the wrong date rather than failing (§8.4).
+  administratif:
+    tag: INF-H
+    priority: [report, signature, received]
+  unknown:
+    tag: INF-L
+    priority: [exam, visit, session, surgery, report, signature]

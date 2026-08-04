@@ -127,6 +127,12 @@ rule_table:
   note_evolution:
     tag: INF-H
     priority: [visit, session, exam, signature]
+  expertise:
+    tag: KEY
+    priority: [exam, report, signature]
+    note: >
+      An expertise is dated by the examination it reports, not by when the party filing it
+      chose to send it.
   certificat_medical:
     tag: KEY
     priority: [exam, visit, signature]

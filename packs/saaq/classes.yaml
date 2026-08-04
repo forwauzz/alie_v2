@@ -1,0 +1,60 @@
+# SAAQ class taxonomy (PRD §6). Deliberately smaller than CNESST's: these are the classes
+# authorable without a real SAAQ bundle in hand. Adding one is a pack edit, not an engine
+# change.
+
+defaults:
+  min_confidence: 0.7
+  unknown_class: unknown
+  unknown_label: Document non classé
+
+classes:
+  - id: rapport_medical
+    label: Rapport médical
+    tag: KEY
+    headings:
+      - "rapport\\s*m[ée]dical"
+    body:
+      - "\\bstabilisation\\b"
+      - "\\bdiagnostic\\b"
+    confidence: 0.85
+
+  - id: expertise
+    label: Expertise médicale
+    tag: KEY
+    headings:
+      - "expertise\\s*m[ée]dicale"
+      - "[ée]valuation\\s*m[ée]dicale\\s*ind[ée]pendante"
+    body:
+      - "\\bIPNP\\b"
+      - "atteinte\\s*permanente"
+    confidence: 0.85
+
+  - id: note_consultation
+    label: Note de consultation
+    tag: KEY
+    headings:
+      - "note\\s*de\\s*consultation"
+      - "note\\s*d.[ée]volution"
+    confidence: 0.8
+
+  - id: rapport_imagerie
+    label: Rapport d'imagerie
+    tag: KEY
+    is_diagnostic_study: true
+    headings:
+      - "rapport\\s*d.?\\s*imagerie"
+      - "\\b(?:IRM|TDM|radiographie|[ée]chographie)\\b"
+    confidence: 0.85
+
+  - id: administratif
+    label: Document administratif
+    tag: INF-H
+    is_admin: true
+    headings:
+      - "facture"
+      - "^\\s*re[çc]u\\b"
+      - "formulaire\\s*de\\s*consentement"
+    body:
+      - "\\btotal\\b"
+      - "num[ée]ro\\s*de\\s*facturation"
+    confidence: 0.85
