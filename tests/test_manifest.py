@@ -282,3 +282,39 @@ def test_author_is_the_signer_not_the_signature_boilerplate(pack):
     )) == "Dr Marie-France LABERGE"
     assert _author(signature("Signé: Dre Claire Fontaine")) == "Dre Claire Fontaine"
     assert _author(signature("Signé le 12 décembre 1992")) == "le 12 décembre 1992"
+
+
+def test_a_document_declaring_itself_starts_a_unit_whatever_its_block_type(pack):
+    """`Note - Soins infirmiers` is typed as a heading on one sheet and a paragraph on the
+    next, depending on how OCR read it. Requiring the heading type merged a complete
+    one-page note into the document before it — and a merged unit gets one date for two
+    encounters, so content from one is filed under the other's date with a real citation
+    attached (§2, §8.5)."""
+    from alie.manifest.boundaries import group_pages
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    def page(idx, declaration_type, body):
+        return [
+            Block(id=f"s{idx}", bundle_id="bun", pdf_index=idx, type=BlockType.STAMP,
+                  text=f"4/1/2025, 6:35 AM TO: +1450 PAGE {idx}/15",
+                  bbox=BBox(0, 0, 400, 10), source=BlockSource.OCR, confidence=0.9, order=0),
+            Block(id=f"d{idx}", bundle_id="bun", pdf_index=idx, type=declaration_type,
+                  text="Note - Soins infirmiers", bbox=BBox(0, 60, 400, 72),
+                  source=BlockSource.OCR, confidence=0.9, order=1),
+            Block(id=f"b{idx}", bundle_id="bun", pdf_index=idx, type=BlockType.PARAGRAPH,
+                  text=body, bbox=BBox(0, 90, 400, 102), source=BlockSource.OCR,
+                  confidence=0.9, order=2),
+        ]
+
+    # Same transmission throughout, so the fax banner offers no boundary here.
+    pages = {
+        1: page(1, BlockType.HEADING, "Première note infirmière"),
+        2: page(2, BlockType.PARAGRAPH, "Deuxième note, lue comme un paragraphe"),
+        3: page(3, BlockType.PARAGRAPH, "Troisième note"),
+    }
+    groups, signals = group_pages(pages, {i: 792.0 for i in pages}, pack)
+
+    assert groups == [[1], [2], [3]]
+    assert all(
+        "declares its own class" in " ".join(signals[i].reasons) for i in (1, 2, 3)
+    )

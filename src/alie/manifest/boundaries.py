@@ -64,6 +64,20 @@ def _class_heading_patterns(pack: Pack) -> list[re.Pattern[str]]:
     ]
 
 
+def _declaration_patterns(pack: Pack) -> list[re.Pattern[str]]:
+    """Patterns by which a document names itself — `Note - Soins infirmiers`.
+
+    Matched against *any* block near the top of the page, not only headings. OCR types the
+    same line as a heading on one sheet and a paragraph on the next, and requiring the
+    heading type merged a complete one-page note into the document before it.
+    """
+    return [
+        re.compile(p, re.IGNORECASE)
+        for c in pack.class_list
+        for p in c.get("declares", [])
+    ]
+
+
 def _label_position(blocks: list[Block]) -> tuple[int, int] | None:
     for b in blocks:
         if b.type is BlockType.PAGE_LABEL:
@@ -105,7 +119,11 @@ def _author(blocks: list[Block]) -> str | None:
 
 
 def signals_for_page(
-    blocks: list[Block], page_height: float, pack: Pack, patterns: list[re.Pattern[str]]
+    blocks: list[Block],
+    page_height: float,
+    pack: Pack,
+    patterns: list[re.Pattern[str]],
+    declarations: list[re.Pattern[str]] | None = None,
 ) -> PageSignals:
     pdf_index = blocks[0].pdf_index if blocks else 0
     if not blocks:
@@ -119,7 +137,18 @@ def signals_for_page(
     reasons: list[str] = []
 
     top = page_height * TOP_BAND
-    headings = [b for b in blocks if b.type is BlockType.HEADING and b.bbox.y0 <= top]
+    near_top = [b for b in blocks if b.bbox.y0 <= top]
+
+    # A document naming itself outranks every other start signal, and the line may be
+    # typed as a heading or as a paragraph depending on how OCR read that sheet.
+    declared = [
+        p.pattern for b in near_top for p in (declarations or []) if p.search(b.text)
+    ]
+    if declared:
+        score += 0.7
+        reasons.append("document declares its own class near the top of the page")
+
+    headings = [b for b in near_top if b.type is BlockType.HEADING]
     if any(p.search(b.text) for b in headings for p in patterns):
         score += 0.5
         reasons.append("class heading near top of page")
@@ -168,8 +197,9 @@ def group_pages(
 ) -> tuple[list[list[int]], dict[int, PageSignals]]:
     """Contiguous first pass. Non-contiguous units are recovered by the re-join pass."""
     patterns = _class_heading_patterns(pack)
+    declarations = _declaration_patterns(pack)
     signals = {
-        idx: signals_for_page(blocks, heights.get(idx, 792.0), pack, patterns)
+        idx: signals_for_page(blocks, heights.get(idx, 792.0), pack, patterns, declarations)
         for idx, blocks in sorted(pages.items())
     }
 
