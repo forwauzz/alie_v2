@@ -6,6 +6,8 @@ text, and must hold uncited = 0 and coverage = 100%.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from alie.models import RowStatus
@@ -57,8 +59,8 @@ def test_bareme_rows_are_stored_individually_with_an_expected_count(store):
         )
         recs = {r.field: r for r in records.for_unit(conn, rem.id)}
 
-    assert recs["bareme.1"].value == "code=102 383|pct=2"
-    assert recs["bareme.2"].value == "code=204 219|pct=2°2"
+    assert json.loads(recs["bareme.1"].value) == {"code": "102 383", "pct": "2"}
+    assert json.loads(recs["bareme.2"].value) == {"code": "204 219", "pct": "2°2"}
     assert recs["bareme.expected_count"].value == "2"
     assert recs["bareme.expected_count"].derived
     # The mis-OCR'd percentage keeps its low confidence all the way through.
@@ -251,3 +253,30 @@ def test_pack_controls_display_only(store):
 
     assert "Médical" in text and "p. 44" in text
     assert pack.output["locator"]["page_prefix"] == "p. "
+
+
+def test_row_titles_and_bullets_never_show_storage_form(store):
+    """The deliverable goes to opposing counsel. A raw class id, a field name or a JSON
+    blob appearing in it is a defect, not cosmetics (§3.2 — code renders the row)."""
+    with db.session(store.db_path) as conn:
+        case_id = build_case(conn, "hard")
+        rows = assemble.run(conn, case_id).rows
+
+    rendered = [r.title for r in rows] + [b.text for r in rows for b in r.bullets]
+    for text in rendered:
+        assert "{" not in text and "}" not in text, text
+        assert "|pct=" not in text, text
+        assert not text.startswith("bareme."), text
+    # The unclassified unit still gets a readable name.
+    assert "unknown" not in " ".join(r.title for r in rows)
+
+
+def test_bareme_line_comes_from_the_pack_not_the_engine(store):
+    with db.session(store.db_path) as conn:
+        case_id = build_case(conn, "hard")
+        rows = assemble.run(conn, case_id).rows
+
+    rem = next(r for r in rows if r.doc_class == "rapport_evaluation_medicale")
+    lines = [b.text for b in rem.bullets]
+    assert "Barème 102 383 — 2 %" in lines
+    assert "Atteinte permanente : oui" in lines

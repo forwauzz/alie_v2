@@ -8,8 +8,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from reportlab import rl_config
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
+
+# Deterministic output. Without this reportlab stamps a fresh creation date and document
+# id into every file, so regenerating the fixtures rewrites bytes that did not change:
+# `git status` is dirty after every test run, and a real fixture edit is invisible in the
+# noise. Byte-stable fixtures are the same discipline as stable row ordering (§10.4).
+rl_config.invariant = 1
 
 WIDTH, HEIGHT = LETTER
 MARGIN = 62

@@ -12,6 +12,7 @@ neither path catches alone.
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -165,9 +166,11 @@ def _read_table_rows(
         value: dict[str, Any] = {"code": code, "pct": m.group("pct")}
         if prior_pattern and (pm := prior_pattern.search(block.text)):
             value["prior_pct"] = pm.group("prior")
+        # JSON rather than a flat string: barème codes are stored individually with their
+        # own percentages (§8.6), and the pack's line template addresses them by name.
         records.append(
             _record(unit, spec, template, f"{spec['id']}.{matched}",
-                    "|".join(f"{k}={v}" for k, v in value.items()),
+                    json.dumps(value, ensure_ascii=False, sort_keys=True),
                     block, (m.start(), m.end()), block.confidence)
         )
 

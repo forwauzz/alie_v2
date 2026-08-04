@@ -32,3 +32,16 @@ title_line:
   # Code renders the row. The model never writes one (§3.2).
   template: "{class_label}{author_suffix}"
   author_suffix: " — {author}"
+
+# How a deterministically-read field (4a) reads as a line in the row. Keyed by the field's
+# base name, so `bareme.1` and `bareme.2` share one template.
+#
+# Without these the row shows the storage form — `bareme.1: code=204 219|pct=2` — which is
+# a machine artefact appearing in a document destined for opposing counsel.
+field_lines:
+  atteinte_permanente: "Atteinte permanente : {value}"
+  consolidation: "Consolidation : {value}"
+  limitations_fonctionnelles: "Limitations fonctionnelles : {value}"
+  diagnostic: "Diagnostic : {value}"
+  bareme: "Barème {code} — {pct} %"
+  bareme_with_prior: "Barème {code} — {pct} % ({prior_pct} % sur antérieur)"

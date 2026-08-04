@@ -38,8 +38,21 @@ class Pack:
         return next((c for c in self.class_list if c["id"] == class_id), None)
 
     def class_label(self, class_id: str) -> str:
+        """Human label for a class. Never falls through to the raw id — an unclassified
+        unit still gets a row, and that row is read by the firm (§3.4)."""
         c = self.class_by_id(class_id)
-        return c["label"] if c else class_id
+        if c:
+            return c["label"]
+        defaults = self.classes.get("defaults", {})
+        if class_id == defaults.get("unknown_class", "unknown"):
+            return defaults.get("unknown_label", "Document non classé")
+        return class_id
+
+    def field_line(self, field: str) -> str | None:
+        """Line template for an extracted field. Code renders the row; the model never
+        writes one (§3.2), and the wording is the pack's business, not the engine's."""
+        base = field.split(".")[0]
+        return self.output.get("field_lines", {}).get(base)
 
     @property
     def date_roles(self) -> dict[str, Any]:

@@ -11,6 +11,9 @@
 defaults:
   min_confidence: 0.7   # below this, the classifier fallback runs (§5)
   unknown_class: unknown
+  # What an unclassified unit is called in the deliverable. A raw class id must never
+  # reach a document the firm hands to opposing counsel.
+  unknown_label: Document non classé
 
 classes:
   - id: rapport_evaluation_medicale

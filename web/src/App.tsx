@@ -1,257 +1,208 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Bullet, Case, FlagSpec, Plan, Row, Validation } from "./api";
+import { useEffect, useRef, useState } from "react";
+import type { Bullet, Case, Row } from "./api";
 import { api } from "./api";
-import { Chronology, SourcePane, WhyPanel } from "./panes";
-
-const STEPS = ["Upload", "Plan", "Approve", "Run", "Review", "Export"] as const;
-type Step = (typeof STEPS)[number];
+import { Inspector } from "./Inspector";
+import { Settings } from "./Settings";
+import { Note, PlanTurn, RunTurn, UserTurn } from "./Turns";
+import { useCase } from "./useCase";
 
 export function App() {
   const [cases, setCases] = useState<Case[]>([]);
-  const [caseId, setCaseId] = useState<string>("");
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [flagSpecs, setFlagSpecs] = useState<FlagSpec[]>([]);
-  const [invariants, setInvariants] = useState<string[]>([]);
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-  const [runId, setRunId] = useState<string | null>(null);
-  const [runStatus, setRunStatus] = useState<string>("");
-  const [rows, setRows] = useState<Row[]>([]);
-  const [validation, setValidation] = useState<Validation | null>(null);
-  const [selectedRow, setSelectedRow] = useState<Row | null>(null);
-  const [selectedBullet, setSelectedBullet] = useState<Bullet | null>(null);
+  const [caseId, setCaseId] = useState("");
+  const [selected, setSelected] = useState<{ row: Row; bullet: Bullet | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const poll = useRef<number | null>(null);
+  const bottom = useRef<HTMLDivElement>(null);
 
-  const step: Step = !caseId
-    ? "Upload"
-    : !runId
-      ? "Plan"
-      : runStatus !== "done"
-        ? "Run"
-        : rows.length
-          ? "Review"
-          : "Approve";
+  const c = useCase(caseId);
 
   useEffect(() => {
     api
       .cases()
-      .then((c) => {
-        setCases(c);
-        if (c.length && !caseId) setCaseId(c[0].id);
+      .then((list) => {
+        setCases(list);
+        setCaseId((current) => current || list[0]?.id || "");
       })
       .catch((e) => setError(String(e)));
-    api
-      .flags()
-      .then((f) => {
-        setFlagSpecs(f.flags);
-        setInvariants(f.safety_invariants);
-      })
-      .catch((e) => setError(String(e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!caseId) return;
-    setRunId(null);
-    setRows([]);
-    setSelectedRow(null);
-    setSelectedBullet(null);
-    api.plan(caseId).then(setPlan).catch((e) => setError(String(e)));
-  }, [caseId]);
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [c.turns.length, c.rows.length, c.run?.status]);
 
-  const loadRows = useCallback(async (id: string) => {
-    const payload = await api.rows(id);
-    setRows(payload.rows);
-    setValidation(payload.validation);
-  }, []);
+  // The selected row is a snapshot; after a re-run its bullets are stale.
+  useEffect(() => setSelected(null), [c.rows]);
 
-  // The user may close the tab; progress is per stage (§4.1). Polling stops as soon as
-  // the run reaches a terminal state.
-  useEffect(() => {
-    if (!runId) return;
-    const tick = async () => {
-      try {
-        const run = await api.run(runId);
-        setRunStatus(run.status);
-        if (["done", "failed", "superseded"].includes(run.status)) {
-          if (poll.current) window.clearInterval(poll.current);
-          poll.current = null;
-          if (run.status === "done") await loadRows(runId);
-        }
-      } catch (e) {
-        setError(String(e));
-      }
-    };
-    void tick();
-    poll.current = window.setInterval(tick, 400);
-    return () => {
-      if (poll.current) window.clearInterval(poll.current);
-      poll.current = null;
-    };
-  }, [runId, loadRows]);
-
-  async function approve() {
-    if (!caseId) return;
-    setError(null);
-    setRows([]);
-    try {
-      const run = await api.createRun(caseId, overrides);
-      setRunId(run.id);
-      setRunStatus(run.status);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
+  const active = cases.find((x) => x.id === caseId);
 
   return (
-    <>
-      <header className="app">
-        <h1>ALIE</h1>
-        <span className="sub">
-          {plan ? `${plan.pack} v${plan.pack_version}` : "chronologie médico-légale"}
-        </span>
-        <span className="spacer" />
-        {validation && (
-          <span
-            className={`chip ${validation.passes ? "ok" : "flag"}`}
-            data-testid="validation"
-            data-passes={String(validation.passes)}
-          >
-            uncited {validation.uncited} · coverage{" "}
-            {(validation.coverage * 100).toFixed(0)}%
-          </span>
-        )}
-        {runId && runStatus === "done" && (
-          <a href={api.exportUrl(runId)} data-testid="export-link">
-            <button>Exporter .md</button>
-          </a>
-        )}
-      </header>
-
-      <nav className="journey" data-testid="journey">
-        {STEPS.map((s) => (
-          <span key={s} className={`step${s === step ? " active" : ""}`} data-step={s}>
-            {s}
-          </span>
-        ))}
-      </nav>
-
-      <div className="toolbar">
-        <label className="muted">Dossier</label>
-        <select
-          value={caseId}
-          data-testid="case-picker"
-          onChange={(e) => setCaseId(e.target.value)}
-        >
-          {cases.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <button className="primary" onClick={approve} data-testid="approve">
-          Approuver et lancer
-        </button>
-        {runId && (
-          <span className="chip" data-testid="run-status" data-status={runStatus}>
-            {runStatus}
-          </span>
-        )}
-      </div>
-
-      {error && <p className="err" data-testid="error">{error}</p>}
-
-      {plan && (
-        <div className="toolbar" data-testid="plan">
-          {/* The plan is the manifest summary in readable form — the first moment a
-              scoping error can be caught, before cost is spent (§4.1). */}
-          <strong data-testid="plan-summary">{plan.summary}</strong>
+    <div className="app">
+      <aside className="rail">
+        <div className="brand">
+          <b>ALIE</b>
+          <span>chronologie médico-légale</span>
         </div>
+        <div className="group">Dossiers</div>
+        <nav data-testid="case-list">
+          {cases.map((x) => (
+            <a
+              key={x.id}
+              className="case"
+              aria-current={x.id === caseId}
+              data-testid="case-item"
+              data-case-name={x.name}
+              onClick={() => setCaseId(x.id)}
+            >
+              {x.name}
+            </a>
+          ))}
+        </nav>
+        <div className="rail-foot">
+          {active ? `${active.primary_pack.toUpperCase()} · un seul acteur, local` : "—"}
+        </div>
+      </aside>
+
+      <main className="main">
+        <div className="topbar">
+          <h1>{active?.name ?? "—"}</h1>
+          <span className="spacer" />
+          <Settings
+            specs={c.flagSpecs}
+            invariants={c.invariants}
+            overrides={c.overrides}
+            onChange={c.setOverrides}
+          />
+        </div>
+
+        <div className="thread" data-testid="thread">
+          <div className="thread-inner">
+            {error && <p className="error">{error}</p>}
+
+            {c.turns.length === 0 && !error && (
+              <p className="empty" data-testid="thread-empty">Ouverture du dossier…</p>
+            )}
+
+            {c.turns.map((turn) => {
+              if (turn.kind === "user") return <UserTurn key={turn.id} text={turn.text} />;
+              if (turn.kind === "note") return <Note key={turn.id} text={turn.text} tone={turn.tone} />;
+              if (turn.kind === "plan") {
+                return (
+                  <PlanTurn
+                    key={turn.id}
+                    plan={c.plan ?? turn.plan}
+                    busy={c.busy}
+                    onRun={() => void c.start("Produisez la chronologie.")}
+                  />
+                );
+              }
+              return (
+                <RunTurn
+                  key={turn.id}
+                  run={c.run?.id === turn.runId ? c.run : null}
+                  rows={c.rows}
+                  validation={c.validation}
+                  selectedId={selected?.row.id ?? null}
+                  onPick={(row, bullet) => setSelected({ row, bullet })}
+                />
+              );
+            })}
+
+            <div ref={bottom} />
+          </div>
+        </div>
+
+        <Composer
+          busy={c.busy}
+          hasRun={Boolean(c.run)}
+          onRun={(text) => void c.start(text)}
+        />
+      </main>
+
+      {selected && (
+        <Inspector
+          row={selected.row}
+          bullet={selected.bullet}
+          onClose={() => setSelected(null)}
+          onCorrect={c.correct}
+        />
       )}
-
-      <div className="panes">
-        <section className="pane">
-          <h2>
-            <span>Chronologie</span>
-            <span className="muted">{rows.length} lignes</span>
-          </h2>
-          <div className="body">
-            <Chronology
-              rows={rows}
-              selected={selectedRow?.id ?? null}
-              onSelect={(row, bullet) => {
-                setSelectedRow(row);
-                setSelectedBullet(bullet);
-              }}
-            />
-          </div>
-        </section>
-
-        <section className="pane">
-          <h2>Source</h2>
-          <div className="body">
-            <SourcePane bullet={selectedBullet} />
-          </div>
-        </section>
-
-        <section className="pane">
-          <h2>Pourquoi</h2>
-          <div className="body">
-            <WhyPanel
-              unitId={selectedRow?.unit_ids[0] ?? null}
-              onCorrected={() => void approve()}
-            />
-            <FlagRegister specs={flagSpecs} overrides={overrides} onToggle={setOverrides} />
-            <h3 style={{ fontSize: 12, margin: "14px 0 4px" }}>Invariants de sûreté</h3>
-            <ul className="muted" style={{ fontSize: 11, paddingLeft: 16 }} data-testid="invariants">
-              {invariants.map((inv) => (
-                <li key={inv}>{inv}</li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      </div>
-    </>
+    </div>
   );
 }
 
-/** Every flag states the question it answers and the metric that judges it (§9.2). */
-function FlagRegister({
-  specs,
-  overrides,
-  onToggle,
+/** The composer offers the actions the engine can actually take. It does not pretend to
+ *  understand free prose — an unrecognised request says so rather than guessing, because
+ *  a scoping error that slips through here costs a whole run (§4.1). */
+function Composer({
+  busy,
+  hasRun,
+  onRun,
 }: {
-  specs: FlagSpec[];
-  overrides: Record<string, boolean>;
-  onToggle: (next: Record<string, boolean>) => void;
+  busy: boolean;
+  hasRun: boolean;
+  onRun: (text: string) => void;
 }) {
-  if (!specs.length) return null;
+  const [text, setText] = useState("");
+  const [rejected, setRejected] = useState<string | null>(null);
+
+  const suggestions = hasRun
+    ? ["Relancer la chronologie", "Qu'est-ce qui reste à vérifier ?"]
+    : ["Produire la chronologie"];
+
+  function submit(value: string) {
+    const t = value.trim();
+    if (!t || busy) return;
+    setText("");
+    if (/chronolog|relanc|produi|générer|generer|refai/i.test(t)) {
+      setRejected(null);
+      onRun(t);
+      return;
+    }
+    setRejected(t);
+  }
+
   return (
-    <>
-      <h3 style={{ fontSize: 12, margin: "16px 0 4px" }}>Drapeaux</h3>
-      <div data-testid="flag-register">
-        {specs.map((spec) => {
-          const value = overrides[spec.id] ?? spec.default === true;
-          return (
-            <label className="flagrow" key={spec.id} data-testid="flag" data-flag-id={spec.id}>
-              <input
-                type="checkbox"
-                checked={value}
-                onChange={(e) => onToggle({ ...overrides, [spec.id]: e.target.checked })}
-              />
-              <span className="meta">
-                <code>{spec.id}</code>{" "}
-                {spec.requires_rerun && (
-                  <span className="chip warn" title="Invalidates derived work">
-                    re-run
-                  </span>
-                )}
-                <span className="metric">{spec.metric}</span>
-              </span>
-            </label>
-          );
-        })}
+    <div className="composer">
+      <div className="composer-inner">
+        {rejected && (
+          <p className="sub" data-testid="composer-rejected">
+            Je ne sais pas encore faire « {rejected} ». Ce que je peux faire :{" "}
+            produire ou relancer la chronologie, et enregistrer une correction depuis une ligne.
+          </p>
+        )}
+        <div className="suggestions">
+          {suggestions.map((s) => (
+            <button key={s} onClick={() => submit(s)} disabled={busy} data-testid="suggestion">
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="box">
+          <textarea
+            rows={1}
+            value={text}
+            placeholder="Demandez une chronologie, ou corrigez une ligne…"
+            data-testid="composer-input"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit(text);
+              }
+            }}
+          />
+          <button
+            className="primary"
+            onClick={() => submit(text)}
+            disabled={busy || !text.trim()}
+            data-testid="composer-send"
+          >
+            {busy ? <span className="spin">◐</span> : "Envoyer"}
+          </button>
+        </div>
+        <p className="hint">
+          Les corrections vont au manifeste, jamais au tableau. Aucun modèle n'est appelé.
+        </p>
       </div>
-    </>
+    </div>
   );
 }

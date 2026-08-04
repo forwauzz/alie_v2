@@ -22,8 +22,13 @@ mlartifacts/
 .env
 .env.local
 
-# Real case files. Fixtures in fixtures/ are synthetic; gold-cnesst points at
-# real files that live outside the repo (§13.3).
+# Real case files. NEVER COMMITTED.
+#
+# `resources/` holds real patient bundles and the paralegal's answer key. Fixtures in
+# `fixtures/` are synthetic; `gold-cnesst` points at these files rather than copying them
+# (§13.3), and PHI controls are explicitly not built yet (§16). Committing one of these
+# would put a real medico-legal file in a public repo permanently.
+resources/
 fixtures/gold-*/
 *.pdf.real
 

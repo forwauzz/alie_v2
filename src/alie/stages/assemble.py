@@ -13,6 +13,7 @@ thing discovered. Illegible units still get a row.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 
@@ -159,7 +160,7 @@ def _build_row(
         for u in group
     ]
     if not illegible:
-        row.bullets = _bullets(conn, group, labels)
+        row.bullets = _bullets(conn, group, labels, pack)
     return row
 
 
@@ -174,7 +175,8 @@ def _title(pack: Pack, classes: list[str], author: str | None) -> str:
 
 
 def _bullets(
-    conn: sqlite3.Connection, group: list[ReportUnit], labels: dict[str, dict[int, str | None]]
+    conn: sqlite3.Connection, group: list[ReportUnit],
+    labels: dict[str, dict[int, str | None]], pack: Pack,
 ) -> list[Bullet]:
     """Selected lines transcribed into the row shape — never a summary (§1.1).
 
@@ -195,7 +197,7 @@ def _bullets(
             block = by_id.get(record.block_id or "")
             if block is None:
                 continue
-            bullets.append(_bullet_from_record(record, block, unit, page_labels))
+            bullets.append(_bullet_from_record(record, block, unit, page_labels, pack))
 
         cited_blocks = {r.block_id for r in structured}
         for block in blocks:
@@ -230,11 +232,39 @@ def _union(bullets: list[Bullet]) -> list[Bullet]:
     return out
 
 
+def _record_line(record: Record, pack: Pack) -> str:
+    """Render a deterministically-read field through the pack's line template.
+
+    Falls back to the field name only when the pack has nothing to say — the storage form
+    (`{"code": "204 219", "pct": "2"}`) must never appear in the deliverable.
+    """
+    template = pack.field_line(record.field)
+    raw = record.value or ""
+    fields: dict[str, str] = {}
+    if raw.startswith("{"):
+        try:
+            fields = {k: str(v) for k, v in json.loads(raw).items()}
+        except json.JSONDecodeError:
+            fields = {}
+
+    if template:
+        if fields and "prior_pct" in fields:
+            template = pack.field_line(f"{record.field.split('.')[0]}_with_prior") or template
+        try:
+            return template.format(value=raw, **fields)
+        except (KeyError, IndexError):
+            pass  # a template naming a field this record does not carry
+    if fields:
+        return ", ".join(f"{k} {v}" for k, v in fields.items())
+    return f"{record.field.replace('_', ' ')} : {raw}"
+
+
 def _bullet_from_record(
-    record: Record, block: Block, unit: ReportUnit, page_labels: dict[int, str | None]
+    record: Record, block: Block, unit: ReportUnit, page_labels: dict[int, str | None],
+    pack: Pack,
 ) -> Bullet:
     return Bullet(
-        text=f"{record.field}: {record.value}",
+        text=_record_line(record, pack),
         confidence=record.confidence,
         rule=record.rule,
         citation=Citation(
