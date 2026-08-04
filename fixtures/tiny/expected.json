@@ -1,0 +1,43 @@
+{
+  "bundles": {
+    "Médical": "Medical.pdf"
+  },
+  "printed_labels": {
+    "1": "1 de 1",
+    "2": "p. 1 de 2",
+    "3": "p. 2 de 2",
+    "4": "1",
+    "5": "44"
+  },
+  "units": [
+    {
+      "class": "rapport_medical",
+      "pages": [
+        1
+      ],
+      "row_date": "2022-04-02"
+    },
+    {
+      "class": "rapport_physiotherapie",
+      "pages": [
+        2,
+        3
+      ],
+      "row_date": "2022-05-10"
+    },
+    {
+      "class": "rapport_imagerie",
+      "pages": [
+        4
+      ],
+      "row_date": "2022-06-01"
+    },
+    {
+      "class": "note_consultation",
+      "pages": [
+        5
+      ],
+      "row_date": "2022-06-15"
+    }
+  ]
+}

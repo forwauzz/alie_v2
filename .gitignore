@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+web/dist/
+
+# Local state — never committed. `make dev` recreates it.
+var/
+!var/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Secrets and config (§13.4: config/secrets never in code)
+.env
+.env.local
+
+# Real case files. Fixtures in fixtures/ are synthetic; gold-cnesst points at
+# real files that live outside the repo (§13.3).
+fixtures/gold-*/
+*.pdf.real
+
+# OS
+Thumbs.db
+.DS_Store

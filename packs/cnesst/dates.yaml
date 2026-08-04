@@ -1,0 +1,136 @@
+# Date roles and the date rule table (PRD §8.4).
+#
+# A page does not have "a date". It has a set of dates, each with a role. The row date is
+# a selection over that set, governed by document class.
+#
+# `date de l'événement` is not a competitor for the row date; it feeds the claim-event
+# dimension. On a REM, `90-05-08` (événement) sits two lines from `92-12-10` (examen).
+#
+# The model is not permitted to choose the date. Extraction output is overwritten by the
+# engine's decision, which explains itself in one line.
+
+# Cues that assign a role to a date found nearby. Matched against the text preceding the
+# date on the same line, then against the line as a whole.
+#
+# Every cue is anchored with `\b`. Without it, `n[ée]\s*le` matches inside `Signé le` and
+# a signature date is filed as a date of birth — which would make it structurally
+# ineligible and silently cost the row its date.
+roles:
+  exam:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*l.?\\s*examen"
+      - "\\bdate\\s*d.?\\s*examen"
+      - "\\bexamin[ée]e?\\s+le\\b"
+      - "\\bexamen\\s+du\\b"
+  visit:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*visite"
+      - "\\bdate\\s*de\\s*(?:la\\s*)?consultation"
+      - "\\bvu\\s+le\\b"
+      - "\\bvisite\\s+du\\b"
+  session:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*s[ée]ance"
+      - "\\bs[ée]ance\\s+du\\b"
+      - "\\btraitement\\s+du\\b"
+  surgery:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*(?:la\\s*)?chirurgie"
+      - "\\bdate\\s*de\\s*l.?\\s*intervention"
+      - "\\bop[ée]r[ée]e?\\s+le\\b"
+  signature:
+    tag: KEY
+    cues:
+      - "\\bsign[ée]e?\\s+le\\b"
+      - "\\bdate\\s*de\\s*(?:la\\s*)?signature"
+  report:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*du\\s*rapport"
+      - "\\brapport\\s+du\\b"
+      - "\\bdate\\s*de\\s*r[ée]daction"
+      - "\\bdict[ée]e?\\s+le\\b"
+
+  # Structurally ineligible. Never competitors for the row date (§8.4).
+  event:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*l.?\\s*[ée]v[ée]nement"
+      - "\\bdate\\s*de\\s*l.?\\s*accident"
+      - "\\bdate\\s*de\\s*la\\s*l[ée]sion"
+      - "\\b[ée]v[ée]nement\\s+du\\b"
+  received:
+    tag: KEY
+    cues: ["\\bre[çc]ue?\\s+le\\b", "\\bdate\\s*de\\s*r[ée]ception"]
+  fax:
+    tag: KEY
+    cues: ["\\bt[ée]l[ée]copie", "\\bfax\\b", "^\\s*de\\s*:", "\\bp\\.\\s*\\d{3}\\b"]
+  print:
+    tag: KEY
+    cues: ["\\bimprim[ée]e?\\s+le\\b", "\\bdate\\s*d.?\\s*impression"]
+  birth:
+    tag: KEY
+    cues: ["\\bdate\\s*de\\s*naissance", "\\bn[ée]e?\\s+le\\b", "\\bddn\\b"]
+  death:
+    tag: KEY
+    cues: ["\\bdate\\s*du\\s*d[ée]c[èe]s", "\\bd[ée]c[ée]d[ée]e?\\s+le\\b"]
+
+# Which role wins, per class. First eligible role present wins; ties inside a role go to
+# the earliest occurrence in reading order.
+#
+# A skill must never restate one of these rules. The moment a skill says "REM uses the
+# exam date," it can drift from this table and you have two sources of truth disagreeing
+# silently (§5.1).
+rule_table:
+  rapport_evaluation_medicale:
+    tag: KEY
+    priority: [exam]
+    note: The REM row date is the examination date, never the événement date.
+  rapport_medical:
+    tag: KEY
+    priority: [exam, visit, signature, report]
+  rapport_imagerie:
+    tag: KEY
+    priority: [exam, report]
+  rapport_physiotherapie:
+    tag: KEY
+    priority: [session, visit, report]
+  rapport_ergotherapie:
+    tag: KEY
+    priority: [session, visit, report]
+  rapport_operatoire:
+    tag: KEY
+    priority: [surgery, exam, report]
+  note_consultation:
+    tag: KEY
+    priority: [visit, exam, signature]
+  note_evolution:
+    tag: INF-H
+    priority: [visit, session, exam, signature]
+  certificat_medical:
+    tag: KEY
+    priority: [exam, visit, signature]
+  resultat_laboratoire:
+    tag: KEY
+    priority: [exam, report]
+  correspondance:
+    tag: INF-H
+    priority: [signature, report]
+  administratif:
+    tag: INF-H
+    priority: [report, signature]
+  unknown:
+    tag: INF-L
+    priority: [exam, visit, session, surgery, report, signature]
+
+# Two-digit years resolve against the file's own anchors, never a fixed century pivot — a
+# file spanning 1990-2026 breaks every pivot. Upper bound is today, never an inferred
+# maximum (§8.4).
+two_digit_years:
+  tag: KEY
+  strategy: file_anchors
+  upper_bound: today

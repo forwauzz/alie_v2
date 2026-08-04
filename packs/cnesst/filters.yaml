@@ -1,0 +1,53 @@
+# Filters (PRD §6).
+#
+# Nothing is dropped. Filtered units still reach the manifest and the coverage report with
+# a status — `excluded_by` names the rule that fired (§3.4).
+
+# Admin noise, excluded by rule.
+unconditional:
+  - id: cnesst.filter.billing
+    tag: KEY
+    classes: [administratif]
+    matches: ["facture", "num[ée]ro\\s*de\\s*facturation", "\\bRAMQ\\b\\s*facturation"]
+    reason: billing
+
+  - id: cnesst.filter.consent
+    tag: KEY
+    matches:
+      - "formulaire\\s*de\\s*consentement"
+      - "autorisation\\s*de\\s*divulgation"
+      - "consentement\\s*[àa]\\s*la\\s*communication"
+    reason: consent
+
+  - id: cnesst.filter.transmission_only
+    tag: INF-H
+    matches: ["^page\\s*de\\s*garde", "bordereau\\s*de\\s*transmission"]
+    reason: transmission_cover_sheet
+
+# The three conditional filters. Each needs a condition the engine can evaluate, so each
+# is stated as a predicate over manifest facts rather than prose.
+conditional:
+  - id: cnesst.filter.duplicate_of_included
+    tag: INF-H
+    when: unit_has_identical_duplicate_already_included
+    reason: duplicate
+    note: >
+      Only fires on the `identical` dedupe verdict — all seven axes matching. Everything
+      else is kept (§10.1).
+
+  - id: cnesst.filter.zero_content_admin
+    tag: INF-H
+    when: unit_has_no_clinical_content_and_class_is_admin
+    reason: zero_content_admin
+    note: >
+      Zero-content *clinical* documents are kept as title-only rows for evidentiary
+      completeness. This filter applies to admin classes only (§8.5).
+
+  - id: cnesst.filter.out_of_claim_scope
+    tag: INF-L
+    when: unit_date_precedes_earliest_claim_event_and_no_rra_reference
+    reason: out_of_claim_scope
+    note: >
+      A 2022 claim framed as an RRA of 1990 pulls 1992-96 REMs into scope, so this must
+      not fire when an RRA relation is present (§5.1). Low-confidence: the adjudicator
+      reviews every unit this excludes.

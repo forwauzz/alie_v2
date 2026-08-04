@@ -1,0 +1,145 @@
+# Class taxonomy and signals (PRD §6).
+#
+# Signals are ordered by cost: form serial, then heading zones, then the model fallback
+# when rules score below 0.7 (§5). All patterns are whitespace-tolerant — a 139-page
+# bundle produced `RAPPORI M AL`, `SANTÉ ET SÉCURIÉ DU TRAVAIL` and `RAPPORTD'IMAGERIE`
+# with the space eaten (§4.4).
+#
+# `serial` matches carry the highest confidence because a form serial is printed by the
+# issuing body, not typed by a clinician.
+
+defaults:
+  min_confidence: 0.7   # below this, the classifier fallback runs (§5)
+  unknown_class: unknown
+
+classes:
+  - id: rapport_evaluation_medicale
+    label: Rapport d'évaluation médicale
+    short: REM
+    tag: KEY
+    serials: ["2064"]
+    headings:
+      - "rapport\\s*d.?\\s*[ée]valuation\\s*m[ée]dicale"
+      - "bilan\\s*des\\s*s[ée]quelles"
+      - "rappor[a-z]?\\s*m\\s*al"     # observed OCR damage of RAPPORT MÉDICAL on a REM
+    body:
+      - "bar[èe]me"
+      - "atteinte\\s*permanente"
+      - "d[ée]ficit\\s*anatomo"
+    confidence: 0.95
+
+  - id: rapport_medical
+    label: Rapport médical
+    tag: KEY
+    serials: ["1918", "1919"]
+    headings:
+      - "rapport\\s*m[ée]dical"
+      - "attestation\\s*m[ée]dicale"
+    body:
+      - "consolidation"
+      - "diagnostic"
+    confidence: 0.9
+
+  - id: rapport_imagerie
+    label: Rapport d'imagerie
+    tag: KEY
+    headings:
+      - "rapport\\s*d.?\\s*imagerie"
+      - "compte\\s*rendu\\s*radiologique"
+      - "\\b(irm|tdm|[ée]chographie|radiographie|scintigraphie)\\b"
+    body:
+      - "conclusion"
+      - "radiologiste"
+    confidence: 0.9
+    # Diagnostic studies split back out of an encounter merge (§8.5).
+    is_diagnostic_study: true
+
+  - id: rapport_physiotherapie
+    label: Rapport de physiothérapie
+    tag: KEY
+    headings:
+      - "rapport\\s*de\\s*physioth[ée]rapie"
+      - "[ée]volution\\s*en\\s*physioth[ée]rapie"
+    body:
+      - "\\bpht\\b"
+      - "physioth[ée]rapeute"
+    confidence: 0.88
+
+  - id: rapport_ergotherapie
+    label: Rapport d'ergothérapie
+    tag: KEY
+    headings:
+      - "rapport\\s*d.?\\s*ergoth[ée]rapie"
+    body:
+      - "\\berg\\b"
+      - "ergoth[ée]rapeute"
+    confidence: 0.88
+
+  - id: rapport_operatoire
+    label: Rapport opératoire
+    tag: KEY
+    headings:
+      - "protocole\\s*op[ée]ratoire"
+      - "rapport\\s*op[ée]ratoire"
+    body:
+      - "intervention"
+      - "chirurgien"
+    confidence: 0.9
+
+  - id: note_consultation
+    label: Note de consultation
+    tag: KEY
+    headings:
+      - "note\\s*de\\s*consultation"
+      - "note\\s*clinique"
+      - "consultation\\s*externe"
+    body:
+      - "subjectif"
+      - "objectif"
+    confidence: 0.85
+
+  - id: note_evolution
+    label: Note d'évolution
+    tag: INF-H
+    headings:
+      - "note\\s*d.?\\s*[ée]volution"
+      - "suivi"
+    confidence: 0.8
+
+  - id: certificat_medical
+    label: Certificat médical
+    tag: KEY
+    headings:
+      - "certificat\\s*m[ée]dical"
+    confidence: 0.88
+    note: >
+      One `Certificat Médical` in the reference bundle emitted two parser headings.
+      Boundary detection must not treat a second heading as a second unit on its own.
+
+  - id: resultat_laboratoire
+    label: Résultat de laboratoire
+    tag: KEY
+    headings:
+      - "r[ée]sultat\\s*de\\s*laboratoire"
+      - "h[ée]mogramme"
+      - "bilan\\s*sanguin"
+    confidence: 0.85
+    is_diagnostic_study: true
+
+  - id: correspondance
+    label: Correspondance
+    tag: INF-H
+    headings:
+      - "\\bobjet\\s*:"
+      - "madame,\\s*monsieur"
+    confidence: 0.7
+
+  - id: administratif
+    label: Document administratif
+    tag: INF-H
+    headings:
+      - "facture"
+      - "re[çc]u"
+      - "formulaire\\s*de\\s*consentement"
+      - "autorisation\\s*de\\s*divulgation"
+    confidence: 0.75

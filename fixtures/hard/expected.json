@@ -1,0 +1,54 @@
+{
+  "bundles": {
+    "Médical": "Medical.pdf"
+  },
+  "units": [
+    {
+      "class": "rapport_evaluation_medicale",
+      "pages": [
+        1
+      ],
+      "row_date": "1992-12-10"
+    },
+    {
+      "class": "note_consultation",
+      "pages": [
+        2,
+        5
+      ],
+      "row_date": "2023-08-03"
+    },
+    {
+      "class": "rapport_imagerie",
+      "pages": [
+        3,
+        4
+      ],
+      "row_date": "2023-08-01"
+    },
+    {
+      "class": "certificat_medical",
+      "pages": [
+        6
+      ],
+      "row_date": null,
+      "status": "ambiguous"
+    },
+    {
+      "class": "resultat_laboratoire",
+      "pages": [
+        7
+      ],
+      "row_date": null,
+      "status": "undated"
+    },
+    {
+      "class": "unknown",
+      "pages": [
+        8
+      ],
+      "row_date": null,
+      "status": "illegible"
+    }
+  ]
+}

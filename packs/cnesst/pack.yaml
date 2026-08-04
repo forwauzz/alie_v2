@@ -1,0 +1,77 @@
+# CNESST regime pack (PRD §6).
+#
+# The engine contains no regime knowledge. No `if regime == "SAAQ"` anywhere. Adding a
+# regime means authoring a pack, not editing the engine.
+#
+# Every rule carries an epistemic tag (§6.2): KEY | INF-H | INF-L | PROP | GAP. That is a
+# confidence model, not a documentation convention. It is what lets the review panel say
+# "this diverges from the gold deliberately, per rule X [PROP]" instead of looking like a
+# defect.
+#
+# Source of truth for the rules themselves is `cnesst_PARALEGAL-EXTRACTION-FRAMEWORK.md`.
+# Where that document and this pack disagree on a rule, it wins.
+
+id: cnesst
+version: "0.1.0"
+name: Commission des normes, de l'équité, de la santé et de la sécurité du travail
+language: fr-CA
+
+# Vocabulary that is genuinely regime-specific. `consolidation` here is `stabilisation`
+# under SAAQ; APIPP here is IPNP there (§6).
+vocabulary:
+  milestone: consolidation
+  impairment: APIPP
+  impairment_long: atteinte permanente à l'intégrité physique ou psychique
+  limitations: limitations fonctionnelles
+
+# Values that must survive as themselves, never collapsed to null or false (§8.6).
+first_class_values:
+  consolidation:
+    tag: KEY
+    # Three states. `aucune` is not `trop tôt` is not absent.
+    states: [oui, non, trop_tot, absent]
+  apipp:
+    tag: KEY
+    # Four states.
+    states: [rated, aucune, trop_tot, absent]
+  limitations_fonctionnelles:
+    tag: KEY
+    states: [rated, aucune, trop_tot, absent]
+
+# Classes on by default. A behaviour flag — safe mid-case, instantly reversible (§9).
+unit_toggles:
+  rapport_evaluation_medicale: true
+  rapport_medical: true
+  note_consultation: true
+  rapport_imagerie: true
+  rapport_physiotherapie: true
+  rapport_ergotherapie: true
+  rapport_operatoire: true
+  certificat_medical: true
+  resultat_laboratoire: true
+  note_evolution: true
+  correspondance: false
+  administratif: false
+
+# Screening: multiple claim events coexist in one CNESST file. A 2022 claim framed as an
+# RRA of 1990 pulls 1992-96 REMs into scope (§5.1).
+screening:
+  - id: cnesst.screen.default
+    tag: INF-H
+    when: always
+    regime: cnesst
+    note: >
+      CNESST is the default regime for units in a CNESST case. Per-unit override exists
+      because regime is a property of the unit, not the case (§6.1).
+  - id: cnesst.screen.rra
+    tag: INF-L
+    when_text_matches:
+      - "récidive"
+      - "rechute"
+      - "aggravation"
+      - "\\bRRA\\b"
+    sets:
+      claim_event_relation: rra
+    note: >
+      An RRA reference means earlier claim events are in scope. Flagged for the
+      adjudicator; the engine does not decide scope on its own.

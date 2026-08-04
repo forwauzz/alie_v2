@@ -1,0 +1,41 @@
+{
+  "bundles": {
+    "CHUM": "CHUM.pdf",
+    "Médical": "Medical.pdf"
+  },
+  "pairs": [
+    {
+      "a": [
+        "Médical",
+        1
+      ],
+      "b": [
+        "CHUM",
+        1
+      ],
+      "verdict": "same_doc_different_artifact"
+    },
+    {
+      "a": [
+        "Médical",
+        2
+      ],
+      "b": [
+        "CHUM",
+        2
+      ],
+      "verdict": "identical"
+    },
+    {
+      "a": [
+        "Médical",
+        3
+      ],
+      "b": [
+        "CHUM",
+        3
+      ],
+      "verdict": "different"
+    }
+  ]
+}
