@@ -149,6 +149,56 @@ def test_saaq_names_the_gaps_it_cannot_read_yet():
     assert all(required.known_gaps(pack))
 
 
+def test_ivac_declares_the_admissibility_set_and_marks_what_needs_a_practitioner():
+    """§8.6's IVAC set: preuve de survenance, offence dates as a range or set, faute
+    lourde, regime precedence, lien. The shape exists so the engine can carry it; the
+    legal rules are marked `[GAP]` rather than invented (§15.8)."""
+    pack = load_pack("ivac")
+    admissibility = pack.pack["admissibility"]
+
+    assert set(admissibility) == {
+        "preuve_de_survenance", "offence_dates", "faute_lourde",
+        "regime_precedence", "lien",
+    }
+    # Offence dates are a range or a set. A single date loses the claim's shape: repeated
+    # offences over a period are ordinary here, not an edge case.
+    assert admissibility["offence_dates"]["kind"] == "date_set"
+    # Regime precedence is the one that cannot be guessed — LATMP takes precedence over
+    # IVAC in the gold file, and *when* is a legal question (§6.1).
+    assert admissibility["regime_precedence"]["tag"] == "GAP"
+    assert admissibility["regime_precedence"]["note"]
+
+
+def test_faute_lourde_is_detected_but_never_adjudicated():
+    """Whether a mention disqualifies a claim is a legal test, not a regex verdict. The
+    rendered line says what the document states and asks a human to decide."""
+    pack = load_pack("ivac")
+    spec = next(f for f in pack.cue_fields if f["id"] == "faute_lourde")
+
+    assert spec["tag"] == "GAP"
+    assert "à faire trancher" in pack.field_line("faute_lourde")
+
+
+def test_every_pack_that_cannot_read_a_required_field_says_why():
+    """A gap somebody wrote down is a decision; a gap nobody wrote down is a defect."""
+    from alie.packs import available, required
+
+    for pack_id in available():
+        pack = load_pack(pack_id)
+        validation = required.validate(pack)
+        assert validation, f"{pack_id} has undeclared unreadable fields: {validation.unreadable}"
+        for name in validation.declared_gaps:
+            assert required.known_gaps(pack) and pack.pack["known_gaps"][name].strip(), name
+
+
+def test_only_cnesst_has_a_binding_treating_opinion_tier():
+    """IVAC and SAAQ have no binding-treating-opinion tier (§8.6). An engine that
+    hardcoded the CNESST answer would be wrong on two of three regimes."""
+    assert load_pack("cnesst").evidence_weight("treating") == "binding_unless_displaced"
+    assert load_pack("saaq").evidence_weight("treating") == "contestable"
+    assert load_pack("ivac").evidence_weight("treating") == "contestable"
+
+
 def test_saaq_uses_its_own_vocabulary_not_cnesst_translated():
     """`consolidation` under CNESST is `stabilisation` here; APIPP there is IPNP here (§6).
     A chronology using the wrong one reads as though the paralegal does not know the

@@ -1,0 +1,27 @@
+# Filters (PRD §6, §3.4). Nothing is dropped: a filtered unit reaches the manifest with
+# `excluded_by` naming the rule.
+#
+# Note what is *not* filtered here. A police report or a court document is evidence of
+# survenance (§8.6), not administrative noise, whatever it looks like structurally.
+
+unconditional:
+  - id: ivac.filter.billing
+    tag: KEY
+    classes: [administratif]
+    matches:
+      - "facture"
+      - "num[ée]ro\\s*de\\s*facturation"
+    reason: billing
+
+  - id: ivac.filter.consent
+    tag: KEY
+    matches:
+      - "formulaire\\s*de\\s*consentement"
+      - "autorisation\\s*de\\s*divulgation"
+    reason: consent
+
+conditional:
+  - id: ivac.filter.zero_content_admin
+    tag: INF-H
+    when: unit_has_no_clinical_content_and_class_is_admin
+    reason: zero_content_admin

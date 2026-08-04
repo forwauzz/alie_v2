@@ -1,0 +1,80 @@
+# IVAC class taxonomy (PRD §6).
+#
+# Psychology and psychiatry carry more weight here than in the other two regimes: the
+# consequences of a criminal offence are frequently psychological, and a chronology that
+# treats a psychologist's note as minor loses the claim.
+
+defaults:
+  min_confidence: 0.7
+  unknown_class: unknown
+  unknown_label: Document non classé
+
+classes:
+  - id: rapport_medical
+    label: Rapport médical
+    tag: KEY
+    headings:
+      - "rapport\\s*m[ée]dical"
+    body:
+      - "\\bdiagnostic\\b"
+      - "cons[ée]quences?\\s*permanentes?"
+    confidence: 0.85
+
+  - id: expertise
+    label: Expertise médicale
+    tag: KEY
+    declares:
+      - "expertise\\s*m[ée]dicale"
+      - "expertise\\s*psychiatrique"
+    headings:
+      - "expertise\\s*m[ée]dicale"
+      - "expertise\\s*(?:psychiatrique|psychologique|orthop[ée]dique)"
+    body:
+      - "s[ée]quelles?\\s*permanentes?"
+    confidence: 0.9
+
+  - id: note_psychologie
+    label: Note de psychologie
+    tag: KEY
+    declares:
+      - "note\\s*de\\s*psychologie"
+      - "suivi\\s*psychologique"
+    headings:
+      - "note\\s*de\\s*psychologie"
+      - "rapport\\s*psychologique"
+      - "suivi\\s*psychoth[ée]rapeutique"
+    body:
+      - "\\bTSPT\\b"
+      - "[ée]tat\\s*de\\s*stress\\s*post-?traumatique"
+      - "\\banxi[ée]t[ée]\\b"
+    confidence: 0.85
+
+  - id: note_consultation
+    label: Note de consultation
+    tag: KEY
+    headings:
+      - "note\\s*de\\s*consultation"
+      - "note\\s*d.[ée]volution"
+    confidence: 0.8
+
+  - id: rapport_imagerie
+    label: Rapport d'imagerie
+    tag: KEY
+    is_diagnostic_study: true
+    headings:
+      - "rapport\\s*d.?\\s*imagerie"
+      - "\\b(?:IRM|TDM|radiographie|[ée]chographie)\\b"
+    confidence: 0.85
+
+  - id: administratif
+    label: Document administratif
+    tag: INF-H
+    is_admin: true
+    headings:
+      - "facture"
+      - "^\\s*re[çc]u\\b"
+      - "formulaire\\s*de\\s*consentement"
+    body:
+      - "\\btotal\\b"
+      - "num[ée]ro\\s*de\\s*facturation"
+    confidence: 0.85

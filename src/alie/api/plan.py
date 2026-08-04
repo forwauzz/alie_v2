@@ -59,6 +59,11 @@ def build(conn: sqlite3.Connection, case_id: str) -> dict:
         "off_by_toggle": len(off_by_toggle),
         "units_in_other_regime": len(other_regime),
         "estimate_seconds": round(len(units) * SECONDS_PER_UNIT, 1),
+        # What this pack states it cannot read yet, and why (§6.2). Surfaced in the plan
+        # because the plan is where a scoping error gets caught before cost is approved
+        # (§4.1) — and "the pack cannot read consolidation on this regime" is exactly the
+        # kind of thing a paralegal must know before, not after.
+        "pack_gaps": dict(sorted(pack.pack.get("known_gaps", {}).items())),
         "summary": _summary(case, pack, bundles, units, counts, excluded, off_by_toggle),
     }
 

@@ -92,6 +92,26 @@ export function PlanTurn({
         )}
       </p>
 
+      {plan.pack_gaps && Object.keys(plan.pack_gaps).length > 0 && (
+        <>
+          {/* The plan is where a scoping error gets caught before cost is approved (§4.1).
+              "This pack cannot read consolidation on this regime" is something she has to
+              know before, not after. */}
+          <p className="sub" data-testid="pack-gaps">
+            Ce régime est incomplet — {Object.keys(plan.pack_gaps).length} champ
+            {Object.keys(plan.pack_gaps).length > 1 ? "s" : ""} que le pack ne sait pas
+            encore lire :
+          </p>
+          <ul className="locked">
+            {Object.entries(plan.pack_gaps).map(([field, why]) => (
+              <li key={field}>
+                <code>{field}</code> — {why}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <div className="actions">
         <button className="primary" onClick={onRun} disabled={busy} data-testid="approve">
           {busy ? "En cours…" : "Produire la chronologie"}

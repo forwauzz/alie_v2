@@ -1,0 +1,112 @@
+# IVAC regime pack (PRD §6).
+#
+# Indemnisation des victimes d'actes criminels. Post-2021 the governing statute is the
+# LAPVIC (Loi visant à aider les personnes victimes d'infractions criminelles); before it,
+# the LIVAC.
+#
+# ## What this pack does not decide
+#
+# Two questions the PRD leaves open (§15.8, §5.6) need a practitioner, and both are marked
+# `known_gaps` below rather than guessed:
+#
+#   1. **How the CNESST REM/2064 coexists with the LAPVIC Répertoire post-2021.** IVAC
+#      files carry CNESST forms; which rating instrument governs, and when, is a legal
+#      question with a wrong answer.
+#   2. **Regime precedence.** The IVAC gold file contains CSST/CNESST documents because
+#      the victim was a logger assaulted on his own logging property, and LATMP takes
+#      precedence (§6.1). *When* it takes precedence is the rule, and inventing it would
+#      produce confident wrong output on exactly the files where precedence is contested.
+#
+# Everything structural is here — identity, vocabulary, classes, dates, filters, the §8.6
+# fields — so that an IVAC document in a mixed file is at least read with IVAC vocabulary
+# instead of being silently translated into CNESST's.
+
+id: ivac
+version: "0.1.0"
+name: Indemnisation des victimes d'actes criminels
+language: fr-CA
+
+identity:
+  serials: []          # [GAP] IVAC form serials not catalogued from real files
+  strong:
+    - "indemnisation\\s*des\\s*victimes\\s*d.actes\\s*criminels"
+    - "\\bIVAC\\b"
+    - "\\bLAPVIC\\b"
+    - "\\bLIVAC\\b"
+    - "personne\\s*victime\\s*d.infraction\\s*criminelle"
+    - "acte\\s*criminel"
+  weak:
+    - "\\bvictime\\b"
+    - "\\bagression\\b"
+    - "r[ée]pertoire\\s*des\\s*cons[ée]quences"
+
+# IVAC speaks of consequences and of a victim, not of a worker and a lésion
+# professionnelle. A chronology using CNESST's words on an IVAC file reads as though the
+# paralegal does not know which regime she is in (§6).
+vocabulary:
+  milestone: consolidation
+  impairment: séquelles permanentes
+  impairment_long: conséquences permanentes de l'infraction criminelle
+  limitations: limitations fonctionnelles
+
+# [GAP] (§6.2). Written down rather than left silent: a gap somebody recorded is a
+# decision, a gap nobody recorded is a defect, and the pack test enforces the difference.
+#
+# Closing these needs a practitioner, not a bundle — unlike SAAQ's gaps, which need forms.
+known_gaps:
+  sequelles_permanentes: >
+    Which rating instrument governs post-2021 — the CNESST Répertoire/2064 or the LAPVIC
+    Répertoire — is unresolved (§15.8, §5.6). No template until that is answered.
+  limitations_fonctionnelles: "same instrument question as sequelles_permanentes"
+  consolidation: >
+    Whether IVAC files use `consolidation` at all, or borrow it from CNESST habit the way
+    §15.7 asks about SAAQ. Needs a practitioner.
+
+first_class_values:
+  consolidation:
+    tag: KEY
+    states: [oui, non, trop_tot, absent]
+  sequelles_permanentes:
+    tag: KEY
+    states: [rated, aucune, trop_tot, absent]
+  limitations_fonctionnelles:
+    tag: KEY
+    states: [rated, aucune, trop_tot, absent]
+
+# §8.6's IVAC admissibility set. Declared as data so the shape exists and the engine can
+# carry it, with each element's *rule* marked where it needs a practitioner.
+#
+# `offence_dates` is a **range or a set**, never a single date (§8.6). Repeated offences
+# over a period are the ordinary case here, not an edge case, and a data model that holds
+# one date silently discards the rest of the claim.
+admissibility:
+  preuve_de_survenance:
+    tag: KEY
+    kind: cue_span
+    note: "Evidence the offence occurred. Cue-readable; the weight it carries is legal."
+  offence_dates:
+    tag: KEY
+    kind: date_set
+    note: "A range or a set. A single date loses the claim's shape (§8.6)."
+  faute_lourde:
+    tag: KEY
+    kind: cue_span
+    note: "[GAP] What disqualifies, and to what degree, is a legal test."
+  regime_precedence:
+    tag: GAP
+    kind: unresolved
+    note: >
+      LATMP takes precedence over IVAC in the gold file (§6.1). The rule for *when* is not
+      stated in the PRD and is not inferable from the documents. Needs a practitioner.
+  lien:
+    tag: KEY
+    kind: cue_span
+    note: "The causal link between the offence and the claimed consequence."
+
+unit_toggles:
+  rapport_medical: true
+  expertise: true
+  note_consultation: true
+  rapport_imagerie: true
+  note_psychologie: true
+  administratif: true

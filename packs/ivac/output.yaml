@@ -1,0 +1,65 @@
+# Output shape (PRD §8.5). Wording is the pack's business, not the engine's.
+
+columns:
+  - header: Date
+  - header: Document
+  - header: Contenu
+
+rows:
+  undated_heading: "SANS DATE — {n} documents à dater"
+  removed_heading: "RETIRÉ PAR RÈGLE — {n} document(s), conservés au dossier"
+
+title_line:
+  author_suffix: " — {author}"
+
+row_content:
+  suppress:
+    - "^\\s*confidentiel"
+    - "t[ée]l[ée]phone\\s*\\+?\\d"
+  repeat_is_furniture: 2
+
+field_lines:
+  sequelles_permanentes: "Séquelles permanentes : {value}"
+  consolidation: "Consolidation : {value}"
+  limitations_fonctionnelles: "Limitations fonctionnelles : {value}"
+  diagnostic: "Diagnostic : {value}"
+  trajectory: "{value}"
+  confounder: "Facteur confondant : {value}"
+  intercurrent_event: "Événement intercurrent : {value}"
+  procured_by: "Rapport obtenu : {value}"
+  preuve_de_survenance: "Preuve de survenance : {value}"
+  lien: "Lien de causalité : {value}"
+  # Reported, never adjudicated. The wording says what the document states, not what it
+  # means for the claim — that is the legal test this pack does not encode (§8.6).
+  faute_lourde: "Mention de faute lourde (à faire trancher) : {value}"
+
+continuation_line: "{value}"
+
+index_fields:
+  - trajectory.enum
+  - evidence_weight
+
+state_labels:
+  sequelles_permanentes:
+    rated: "oui"
+    aucune: "aucune"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignées au rapport"
+  consolidation:
+    oui: "oui"
+    non: "non"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignée au rapport"
+  limitations_fonctionnelles:
+    rated: "oui"
+    aucune: "aucune"
+    trop_tot: "trop tôt pour se prononcer"
+    absent: "non renseignées au rapport"
+  procured_by:
+    treating: "par le médecin traitant"
+    insurer_expert: "à la demande de l'IVAC"
+  trajectory.enum:
+    amelioration: "amélioration"
+    deterioration: "détérioration"
+    stable: "stationnaire"
+    unclassified: "évolution décrite, non classée"

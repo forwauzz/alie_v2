@@ -1,0 +1,88 @@
+# Date roles and the date rule table (PRD §8.4).
+#
+# The `event` role here is the **offence** date. It is structurally ineligible to become a
+# row date, exactly as in the other regimes, and it feeds the claim-event dimension (§8.6).
+#
+# One difference that matters: an IVAC claim's offence may be a **range or a set** rather
+# than one date — repeated offences over a period are ordinary here (§8.6). Every offence
+# date found is kept as its own fact; the engine never collapses them to a first reading,
+# and `admissibility.offence_dates` in pack.yaml declares that shape.
+
+roles:
+  exam:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*l.?\\s*examen"
+      - "\\bexamin[ée]e?\\s+le\\b"
+  visit:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*visite"
+      - "\\bdate\\s*de\\s*(?:la\\s*)?consultation"
+  session:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*s[ée]ance"
+      - "\\bs[ée]ance\\s*du\\b"
+  surgery:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*la\\s*chirurgie"
+      - "\\bop[ée]r[ée]e?\\s+le\\b"
+  signature:
+    tag: KEY
+    cues:
+      - "\\bsign[ée]e?\\s*(?:[ée]lectroniquement\\s*)?le\\b"
+  report:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*du\\s*rapport"
+  # The offence. Never a row date; it is the claim-event dimension (§8.4, §8.6).
+  event:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*l.?\\s*[ée]v[ée]nement"
+      - "\\bdate\\s*de\\s*l.?\\s*infraction"
+      - "\\bdate\\s*de\\s*l.?\\s*agression"
+      - "\\bfaits\\s*survenus\\s*le\\b"
+  received:
+    tag: INF-H
+    cues:
+      - "\\bre[çc]u\\s+le\\b"
+  fax:
+    tag: INF-H
+    cues:
+      - "\\btransmis\\s+le\\b"
+  birth:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*de\\s*naissance"
+      - "\\bn[ée]e?\\s+le\\b"
+  death:
+    tag: KEY
+    cues:
+      - "\\bdate\\s*du\\s*d[ée]c[èe]s"
+      - "\\bd[ée]c[ée]d[ée]e?\\s+le\\b"
+
+rule_table:
+  rapport_medical:
+    tag: KEY
+    priority: [exam, visit, signature, report]
+  expertise:
+    tag: KEY
+    priority: [exam, report, signature]
+  note_psychologie:
+    tag: KEY
+    priority: [session, visit, exam, signature]
+  note_consultation:
+    tag: KEY
+    priority: [visit, exam, signature]
+  rapport_imagerie:
+    tag: KEY
+    priority: [exam, report]
+  administratif:
+    tag: INF-H
+    priority: [report, signature, received]
+  unknown:
+    tag: INF-L
+    priority: [exam, visit, session, surgery, report, signature]

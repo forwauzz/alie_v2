@@ -28,6 +28,8 @@ export type Plan = {
   estimate_seconds: number;
   summary: string;
   bundles: { id: string; folder: string; pages: number }[];
+  /** What this regime pack states it cannot read yet, keyed by field (PRD §6.2). */
+  pack_gaps?: Record<string, string>;
 };
 
 export type FlagSpec = {

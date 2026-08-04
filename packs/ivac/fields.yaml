@@ -1,0 +1,94 @@
+# §8.6 fields read by cue, plus the IVAC admissibility set's cue-readable elements.
+#
+# What is readable here is *what the document says*. What it is worth — whether a `faute
+# lourde` mention disqualifies, whether LATMP takes precedence — is a legal test, marked
+# `[GAP]` in pack.yaml and not decided by a regex.
+
+fields:
+  - id: trajectory
+    kind: free_text_with_enum
+    tag: INF-H
+    cues_from_enum: true
+    enum:
+      amelioration:
+        - "\\bam[ée]lior"
+        - "\\bprogr[èe]s\\b"
+        - "\\bgu[ée]rison\\b"
+        - "\\ben\\s*r[ée]mission\\b"
+      deterioration:
+        - "\\bd[ée]t[ée]rior"
+        - "\\baggrav"
+        - "\\br[ée]gression\\b"
+        - "\\bd[ée]compensation\\b"
+      stable:
+        - "\\bstatu\\s*quo\\b"
+        - "\\bstationnaire\\b"
+        - "\\binchang[ée]"
+        - "\\bplateau\\b"
+
+  - id: confounder
+    kind: cue_span
+    tag: INF-H
+    cues:
+      - "\\bconfondu[e]?[s]?\\s*par\\b"
+      - "\\bcondition\\s*personnelle\\s*pr[ée]existante\\b"
+      - "\\battribuable\\s*[àa]\\s*une\\s*autre\\s*cause\\b"
+      - "\\bant[ée]c[ée]dents?\\s*psychiatriques?\\s*pr[ée]existants?\\b"
+
+  - id: intercurrent_event
+    kind: cue_span
+    tag: INF-H
+    cues:
+      - "\\b[ée]v[ée]nement\\s*intercurrent\\b"
+      - "\\bnouvelle\\s*agression\\b"
+      - "\\bnouvel\\s*[ée]v[ée]nement\\s*traumatique\\b"
+
+  # Evidence the offence occurred. Cue-readable; what it is *worth* is legal (§8.6).
+  - id: preuve_de_survenance
+    kind: cue_span
+    tag: KEY
+    cues:
+      - "\\brapport\\s*de\\s*police\\b"
+      - "\\bd[ée]claration\\s*[àa]\\s*la\\s*police\\b"
+      - "\\bplainte\\s*d[ée]pos[ée]e\\b"
+      - "\\bnum[ée]ro\\s*d.[ée]v[ée]nement\\s*policier\\b"
+      - "\\bjugement\\b"
+
+  # The causal link between the offence and the claimed consequence.
+  - id: lien
+    kind: cue_span
+    tag: KEY
+    cues:
+      - "\\blien\\s*de\\s*causalit[ée]\\b"
+      - "\\ben\\s*relation\\s*avec\\s*l.[ée]v[ée]nement\\b"
+      - "\\bcons[ée]cutif\\s*[àa]\\s*l.agression\\b"
+      - "\\battribuable\\s*[àa]\\s*l.infraction\\b"
+
+  # [GAP] Detected, never adjudicated. Whether a mention disqualifies the claim, and to
+  # what degree, is a legal test this pack does not encode (§8.6, §15.8).
+  - id: faute_lourde
+    kind: cue_span
+    tag: GAP
+    cues:
+      - "\\bfaute\\s*lourde\\b"
+      - "\\bcontribution\\s*de\\s*la\\s*victime\\b"
+
+  - id: procured_by
+    kind: classify
+    tag: INF-H
+    values:
+      insurer_expert:
+        - "\\b[àa]\\s*la\\s*demande\\s*de\\s*(?:l.)?IVAC\\b"
+        - "\\bexpertise\\s*m[ée]dicale\\b"
+        - "m[ée]decin\\s*d[ée]sign[ée]"
+      treating:
+        - "\\bm[ée]decin\\s*traitant\\b"
+        - "\\bm[ée]decin\\s*de\\s*famille\\b"
+        - "\\bpsychologue\\s*traitant\\b"
+
+# IVAC has **no binding-treating-opinion tier** (§8.6), same as SAAQ and unlike CNESST. An
+# engine that carried the CNESST answer across would overstate every treating report.
+evidence_weight:
+  treating: contestable
+  insurer_expert: contestable
+  unknown: unweighted
