@@ -280,3 +280,98 @@ def test_bareme_line_comes_from_the_pack_not_the_engine(store):
     lines = [b.text for b in rem.bullets]
     assert "Barème 102 383 — 2 %" in lines
     assert "Atteinte permanente : oui" in lines
+
+
+# ------------------------------------------------------------------ line selection
+
+
+def _blocks(*rows):
+    from alie.models import BBox, Block, BlockSource, BlockType
+
+    out = []
+    for i, (page, kind, text) in enumerate(rows):
+        out.append(
+            Block(id=f"b{i}", bundle_id="bun", pdf_index=page, type=BlockType(kind), text=text,
+                  bbox=BBox(0, i * 12, 400, i * 12 + 10), source=BlockSource.OCR,
+                  confidence=0.9, order=i)
+        )
+    return out
+
+
+def test_letterhead_and_identity_never_become_row_content():
+    """She transcribes *selected* lines (§1.1). Every line, cited, is the document again."""
+    from alie.packs import load
+    from alie.stages.select_lines import select
+
+    blocks = _blocks(
+        (1, "paragraph", "Clinique Médicale Mères & Monde"),
+        (1, "paragraph", "Nom du Patient HUARD, Eric Date de naissance 1970-07-16"),
+        (1, "paragraph", "NAM HUAE70071617 Sexe à la naissance Homme"),
+        (1, "heading", "RAISON DE LA VISITE"),
+        (1, "paragraph", "Suivi CNESST Lombosciatalgie G sur HD L5-S1."),
+    )
+    kept = [b.text for b in select(blocks, load("cnesst")).kept]
+
+    assert kept == ["Suivi CNESST Lombosciatalgie G sur HD L5-S1."]
+
+
+def test_a_recurring_footer_does_not_close_the_section_above_it():
+    """`CONFIDENTIEL` is printed at the foot of every page. Read as a section boundary it
+    deleted the tail of every note."""
+    from alie.packs import load
+    from alie.stages.select_lines import select
+
+    blocks = _blocks(
+        (1, "heading", "EXAMEN"),
+        (1, "paragraph", "SLR G 25 et D 40 avec fesse G"),
+        (1, "heading", "CONFIDENTIEL"),
+        (2, "heading", "CONFIDENTIEL"),
+        (2, "paragraph", "ROM épaule G: rot externe limitée 40 degrés"),
+    )
+    kept = [b.text for b in select(blocks, load("cnesst")).kept]
+
+    assert "SLR G 25 et D 40 avec fesse G" in kept
+    assert "ROM épaule G: rot externe limitée 40 degrés" in kept
+
+
+def test_a_named_section_heading_is_never_treated_as_furniture():
+    """A unit holding several consecutive notes repeats `RAISON DE LA VISITE` on every
+    page. Discarding it as a running header meant no section ever opened and the whole
+    five-page unit came out with nothing in it."""
+    from alie.packs import load
+    from alie.stages.select_lines import select
+
+    blocks = _blocks(
+        *[(p, "heading", "RAISON DE LA VISITE") for p in (1, 2, 3, 4)],
+        (1, "paragraph", "Première consultation"),
+        (4, "paragraph", "Quatrième consultation"),
+    )
+    kept = [b.text for b in select(blocks, load("cnesst")).kept]
+
+    assert "Première consultation" in kept
+    assert "Quatrième consultation" in kept
+
+
+def test_selection_never_empties_a_readable_document():
+    """A row rendering as a title with nothing under it is indistinguishable from a
+    document that genuinely said nothing (§3.4)."""
+    from alie.packs import load
+    from alie.stages.select_lines import select
+
+    blocks = _blocks(
+        (1, "paragraph", "Contenu clinique sans aucune section reconnue par le pack"),
+        (1, "paragraph", "Deuxième ligne également hors section"),
+    )
+    result = select(blocks, load("cnesst"))
+
+    assert len(result.kept) == 2
+
+
+def test_real_case_rows_are_never_empty_when_legible(store):
+    with db.session(store.db_path) as conn:
+        case_id = build_case(conn, "hard")
+        rows = assemble.run(conn, case_id).rows
+
+    for row in rows:
+        if row.illegible_reason is None:
+            assert row.bullets, f"{row.title} rendered with no content"

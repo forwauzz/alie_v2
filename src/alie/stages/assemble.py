@@ -35,6 +35,7 @@ from ..stores import blocks as blocks_store
 from ..stores import cases, manifest
 from ..stores.records import Record
 from ..stores.records import for_unit as records_for_unit
+from . import select_lines
 
 #: Block types that do not become bullets.
 #:
@@ -199,8 +200,10 @@ def _bullets(
                 continue
             bullets.append(_bullet_from_record(record, block, unit, page_labels, pack))
 
+        # Selected lines, not every line (§1.1). What is left out stays in the block
+        # store with its citation intact.
         cited_blocks = {r.block_id for r in structured}
-        for block in blocks:
+        for block in select_lines.select(blocks, pack).kept:
             if block.type in FURNITURE or block.id in cited_blocks:
                 continue
             bullets.append(_bullet_from_block(block, unit, page_labels))

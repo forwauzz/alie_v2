@@ -38,6 +38,66 @@ title_line:
 #
 # Without these the row shows the storage form — `bareme.1: code=204 219|pct=2` — which is
 # a machine artefact appearing in a document destined for opposing counsel.
+# Which source lines become row content.
+#
+# From PART 0 of the framework: she does **not** summarise, she **transcribes selected
+# lines**. Transcribing every line is not that — it is the document again, with citations.
+# A note carries ~100 lines and perhaps eight of them belong in a chronology.
+#
+# Selection is the pack's business, not the engine's: which sections of a clinical note
+# matter is regime and specialty knowledge.
+row_content:
+  # Content under these section headings goes into the row.
+  include_sections:
+    - "raison\\s*de\\s*la\\s*(?:visite|consultation)"
+    - "histoire\\s*de\\s*la\\s*maladie"
+    - "motif\\s*de\\s*(?:la\\s*)?consultation"
+    - "subjectif"
+    - "objectif"
+    - "examen"
+    - "impression"
+    - "conclusion"
+    - "diagnostic"
+    - "\\bplan\\b"
+    - "prescription"
+    - "recommandations?"
+    - "[ée]volution"
+    - "observations?"
+    - "interventions?"
+    - "bilan\\s*des\\s*s[ée]quelles"
+    - "limitations?\\s*fonctionnelles?"
+    - "atteinte\\s*permanente"
+    - "consolidation"
+    - "renseignements\\s*cliniques"
+    - "technique"
+
+  # Never row content, whatever section they sit under.
+  exclude_sections:
+    - "confidentiel"
+    - "avis\\s*de\\s*confidentialit[ée]"
+    - "ant[ée]c[ée]dents\\s*familiaux"
+
+  # Identity and letterhead. These repeat on every sheet and say nothing about the
+  # encounter. Blocks stay in the manifest and every citation still resolves to them —
+  # the row is a projection, not a replacement (§3.1, §3.4).
+  suppress:
+    - "^\\s*nom\\s*du\\s*patient"
+    - "^\\s*nam\\b"
+    - "date\\s*de\\s*naissance"
+    - "date\\s*d.?\\s*expiration"
+    - "sexe\\s*[àa]\\s*la\\s*naissance"
+    - "^\\s*t[ée]l\\.?\\s*:"
+    - "^\\s*fax\\s*:"
+    - "^\\s*\\d+\\s*(boul|boulevard|rue|av|avenue|chemin|ch\\.)\\b"
+    - "^\\s*dossier\\s*:"
+    - "^\\s*n[°o]\\s*de\\s*dossier"
+    - "t[ée]l[ée]phone\\s*\\+?\\d"
+    - "^\\s*note\\s*[-–—]\\s*"          # the note-type line is already the row title
+
+  #: A line repeating on this many pages of one unit is page furniture, not content.
+  #: Chronology content does not appear identically on every sheet.
+  repeat_is_furniture: 2
+
 field_lines:
   atteinte_permanente: "Atteinte permanente : {value}"
   consolidation: "Consolidation : {value}"
