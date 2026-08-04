@@ -82,8 +82,14 @@ row_content:
   # the row is a projection, not a replacement (§3.1, §3.4).
   suppress:
     - "^\\s*nom\\s*du\\s*patient"
-    - "^\\s*nam\\b"
+    # Health-insurance number and date of birth, however the provider lays them out.
+    # A one-page report has no repetition to learn from, so its letterhead has to be
+    # named: `Quebec NAM: HUAE70071617`, `PREVOST Naissance: 1970-07-16`.
+    - "\\bnam\\s*:?\\s*[A-Za-z]{4}\\d"
+    - "\\bnaissance\\s*:?\\s*\\d{4}-"
     - "date\\s*de\\s*naissance"
+    - "^\\s*\\d{3}\\s*rue\\b"
+    - ",\\s*(QC|Qu[ée]bec)\\s+[A-Z]\\d[A-Z]"      # a postal address line
     - "date\\s*d.?\\s*expiration"
     - "sexe\\s*[àa]\\s*la\\s*naissance"
     - "^\\s*t[ée]l\\.?\\s*:"
