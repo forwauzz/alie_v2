@@ -7,32 +7,35 @@
 PY := uv run
 API_PORT ?= 8471
 WEB_PORT ?= 5472
+MLFLOW_PORT ?= 5471
 
-.PHONY: help install dev web test lint fixtures run eval clean
+.PHONY: help install dev mlflow web test lint fixtures run eval shadow clean
 
 help:
 	@echo "install   install python + web deps"
-	@echo "dev       start the API on :$(API_PORT) (idempotent, fixed port)"
+	@echo "dev       start the API on :$(API_PORT) and MLflow on :$(MLFLOW_PORT)"
 	@echo "web       start the Vite dev server on :$(WEB_PORT)"
 	@echo "test      run the test suite"
 	@echo "lint      ruff + tsc"
 	@echo "fixtures  regenerate the synthetic fixtures"
 	@echo "run       run a fixture end to end and print the chronology (F=hard)"
 	@echo "eval      score every gold end to end; non-zero if a must-hold fails (§11)"
+	@echo "mlflow    start the tracking server on :$(MLFLOW_PORT) (§11.1)"
 
 install:
 	uv venv
-	uv pip install -e ".[dev]"
+	uv pip install -e ".[dev,eval]"
 	npm --prefix web install
 
-# Foreground. Idempotent: a second run reports "already running" rather than failing on a
-# port collision, and a foreign holder is named rather than silently worked around.
-#
-# §13.2 asks this to start the app *and* MLflow together. MLflow arrives with the eval
-# harness in Phase 2; until then this starts the app only, and says so rather than
-# pretending otherwise.
+# Foreground. Starts the app *and* MLflow together (§13.2). Idempotent: a second run reports "already
+# running" rather than colliding. MLflow missing is reported, never fatal — the app is the
+# source of truth and the harness runs without a recording surface.
 dev:
 	$(PY) alie dev
+
+# The tracking server on its own, for scoring without the API up.
+mlflow:
+	$(PY) alie mlflow
 
 web:
 	npm --prefix web run dev

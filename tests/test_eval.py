@@ -151,3 +151,72 @@ def test_mlflow_absence_is_not_an_error(store):
     assert (out / "chronology.json").exists()
     assert (out / "failures.txt").exists()
     assert "extract_row_lines@v1" in (out / "prompts.txt").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------- tracking server
+
+
+def test_the_tracking_store_lives_with_the_disposable_state(store):
+    """MLflow is a recording surface, not a source of truth (§11.1). Deleting its store
+    loses the history of measurements, never case data — the golds can be re-run."""
+    from alie.eval import tracking
+
+    cfg = tracking.config()
+
+    assert str(store.var_dir) in cfg.store_uri.replace("/", "\\") or str(
+        store.var_dir.as_posix()
+    ) in cfg.store_uri
+    assert cfg.artifacts.is_relative_to(store.var_dir)
+
+
+def test_a_sink_with_nothing_listening_reports_why(store, monkeypatch):
+    """A count of zero cannot distinguish "no server" from "the server rejected it", and
+    the two need different fixes."""
+    from alie.eval import mlflow_sink, tracking
+
+    monkeypatch.setattr(tracking, "alive", lambda *_a, **_k: False)
+    with db.session(store.db_path) as conn:
+        report = eval_kit.run(conn, eval_kit.load("tiny"))
+
+    assert mlflow_sink.log(report) is False
+    assert mlflow_sink.last_error
+
+
+def test_artifacts_are_written_even_when_nothing_is_listening(store, monkeypatch):
+    """A run scored while the server was down is not lost."""
+    from alie.eval import mlflow_sink, tracking
+
+    monkeypatch.setattr(tracking, "alive", lambda *_a, **_k: False)
+    with db.session(store.db_path) as conn:
+        report = eval_kit.run(conn, eval_kit.load("tiny"))
+    mlflow_sink.log(report)
+
+    out = store.var_dir / "eval" / "tiny"
+    assert (out / "chronology.json").exists()
+    assert (out / "prompts.txt").exists()
+
+
+def test_the_experiment_pins_a_filesystem_artifact_location(store):
+    """MLflow's default is a *proxied* root the client uploads through the tracking
+    server. That path returned 500s and, before a timeout existed, hung outright.
+    Everything is on one machine, so artifacts belong on the filesystem."""
+    import inspect
+
+    from alie.eval import mlflow_sink
+
+    source = inspect.getsource(mlflow_sink._experiment_id)
+    assert "artifact_location" in source
+    assert "as_uri" in source
+
+
+def test_stopping_the_server_stops_its_workers():
+    """MLflow serves through waitress with multiprocessing workers. Terminating the parent
+    leaves orphans holding the socket, which then answer health checks — so `start()`
+    reports "already running" and hands back a server built from the *previous*
+    configuration."""
+    import inspect
+
+    from alie.eval import tracking
+
+    source = inspect.getsource(tracking.stop)
+    assert "/T" in source

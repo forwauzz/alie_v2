@@ -29,6 +29,10 @@ def store(tmp_path, monkeypatch):
     for module in (
         "alie.stores.db", "alie.stores.blobs", "alie.stores.audit", "alie.api.app",
         "alie.cli",
+        # These write eval artifacts and the tracking store. Without them a test run
+        # scribbles into the real `var/`, which is how `var/eval` appeared in a working
+        # tree that had never run a real sweep.
+        "alie.eval.mlflow_sink", "alie.eval.tracking",
     ):
         mod = __import__(module, fromlist=["SETTINGS"])
         if hasattr(mod, "SETTINGS"):

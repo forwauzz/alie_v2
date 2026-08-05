@@ -68,6 +68,19 @@ diagnostics (§11.3):
 make eval
 ```
 
+Runs are logged to MLflow on :5471, one per gold, tagged with a shared run group (§11.1).
+`alie dev` starts it alongside the API; on its own:
+
+```bash
+uv run alie mlflow
+```
+
+MLflow is a **recording surface, not a source of truth**. Raw PDFs and answer keys are
+never logged — a gold's id, version and content hash prove which key a run scored against
+without copying patient files into a second store. If the server is down the sweep still
+runs, still scores, and still writes its artifacts to `var/eval`; it says so rather than
+reporting a silent zero.
+
 Measure one flag against the baseline over the same golds (§9.1). Reports the metric delta
 and the row churn separately, and refuses to vary two things at once:
 

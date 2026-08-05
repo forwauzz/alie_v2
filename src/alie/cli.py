@@ -53,6 +53,30 @@ def _port_holder(port: int) -> str:
     return "unknown process"
 
 
+def _start_tracking(enabled: bool) -> None:
+    """Bring MLflow up alongside the API (§13.2).
+
+    Absence is reported, never fatal. The app is the source of truth and the harness runs
+    without a recording surface; refusing to start the thing that reads PDFs because the
+    thing that stores numbers is missing would have it backwards (§11.1).
+    """
+    if not enabled:
+        print("mlflow      disabled (--no-mlflow)")
+        return
+
+    from .eval import tracking
+
+    if not tracking.available():
+        print('mlflow      not installed — `uv pip install -e ".[eval]"` to record runs')
+        return
+    try:
+        process, cfg = tracking.start()
+    except RuntimeError as exc:
+        print(f"mlflow      {exc}", file=sys.stderr)
+        return
+    print(f"mlflow      {cfg.url}" + ("" if process else "  (already running)"))
+
+
 def cmd_dev(args: argparse.Namespace) -> int:
     port = SETTINGS.api_port
     if not _port_free(port):
@@ -72,6 +96,7 @@ def cmd_dev(args: argparse.Namespace) -> int:
     import uvicorn
 
     ensure_dirs()
+    _start_tracking(not args.no_mlflow)
     print(f"alie api    http://127.0.0.1:{port}")
     print(f"logs        {SETTINGS.log_dir / 'alie.log'}")
     uvicorn.run(
@@ -151,19 +176,65 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
     flags = {"manifest.orphan_rejoin": True} if args.rejoin else {}
     group = args.group or f"eval-{len(names)}-golds"
-    failed = []
+    failed, logged = [], 0
     for name in names:
         with db.session() as conn:
             report = eval_kit.run(conn, eval_kit.load(name), flags=flags)
         print(report.summary())
         print()
-        mlflow_sink.log(report, run_group=group)
+        logged += 1 if mlflow_sink.log(report, run_group=group) else 0
         if not report.holds:
             failed.append(name)
+
+    # Where the numbers went, always. A sweep that logged nothing because the tracking
+    # server was down should say so rather than look identical to one that logged
+    # everything (§11.1).
+    from .eval import tracking
+
+    if logged:
+        print(f"logged {logged}/{len(names)} run(s) to {tracking.config().url} "
+              f"as run_group={group!r}")
+    else:
+        # Say *why*, not just "zero". "No server" and "the server rejected it" need
+        # different fixes, and a bare count cannot tell them apart.
+        print(
+            f"logged 0/{len(names)} runs: {mlflow_sink.last_error or 'unknown reason'}. "
+            f"Artifacts are on disk at {SETTINGS.var_dir / 'eval'}; "
+            f"start a server with `alie mlflow` if one is not running on "
+            f":{SETTINGS.mlflow_port}.",
+            file=sys.stderr,
+        )
 
     if failed:
         print(f"must-hold metrics failed: {', '.join(failed)}", file=sys.stderr)
     return 1 if failed else 0
+
+
+def cmd_mlflow(args: argparse.Namespace) -> int:
+    """Start the tracking server on its own (§13.2). Idempotent, fixed port."""
+    from .eval import tracking
+
+    ensure_dirs()
+    try:
+        process, cfg = tracking.start()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if process is None:
+        print(f"already running on {cfg.url}")
+        return 0
+
+    print(f"mlflow      {cfg.url}")
+    print(f"store       {cfg.store_uri}")
+    print(f"artifacts   {cfg.artifacts}")
+    try:
+        process.wait()
+    except KeyboardInterrupt:
+        # Stop the workers too, or the next start reports "already running" against a
+        # server built from the previous configuration.
+        tracking.stop(process)
+    return 0
 
 
 def cmd_shadow(args: argparse.Namespace) -> int:
@@ -203,12 +274,36 @@ def cmd_shadow(args: argparse.Namespace) -> int:
     return 1 if unsafe else 0
 
 
+def _use_utf8() -> None:
+    """Make the console UTF-8 before anything writes to it.
+
+    This is a French-language product on a Windows-first machine, and the default console
+    codepage is cp1252. Two concrete failures came from that: the eval summary crashed on
+    `✗`, and MLflow's own `🏃 View run` banner raised UnicodeEncodeError *inside* the
+    logging block — which looked like a tracking failure and was really a print failure.
+
+    `errors="replace"` rather than strict: a chronology must never be lost because a
+    terminal cannot draw one of its characters.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):  # pragma: no cover - exotic terminals
+                pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _use_utf8()
     parser = argparse.ArgumentParser(prog="alie", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     dev = sub.add_parser("dev", help="start the API (idempotent, fixed port)")
     dev.add_argument("--reload", action="store_true")
+    dev.add_argument(
+        "--no-mlflow", action="store_true", help="start the API without the tracking server"
+    )
     dev.set_defaults(func=cmd_dev)
 
     fx = sub.add_parser("fixtures", help="regenerate the synthetic fixtures")
@@ -232,6 +327,9 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--value", help="candidate value as JSON (default: true)")
     sh.add_argument("--gold", help="one gold id; omit to compare across every gold")
     sh.set_defaults(func=cmd_shadow)
+
+    ml = sub.add_parser("mlflow", help="start the MLflow tracking server (§13.2)")
+    ml.set_defaults(func=cmd_mlflow)
 
     args = parser.parse_args(argv)
     return args.func(args)
