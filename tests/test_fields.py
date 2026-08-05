@@ -125,6 +125,23 @@ def test_a_real_trajectory_statement_still_reads(store, pack):
     assert "amélioration marquée" in got
 
 
+def test_a_fax_banner_is_not_a_clinical_finding(store, pack):
+    """Measured on case 1: `2023-03-13 42:45 (450) 848-1695 = 6e aggravation.` was read as
+    an intercurrent event, because the word count counted digit groups. A statement is made
+    of words; a banner is made of numbers."""
+    from alie.stages import fields as fs
+
+    assert not fs._looks_like_a_statement("2023-03-13 42:45 (450) 848-1695 = 6e aggravation.")
+    assert fs._looks_like_a_statement(
+        "Le travailleur a subi une aggravation de sa condition lombaire en mai."
+    )
+    # And the count must not cost a short but unambiguous finding. This exact clause is
+    # the only true confounder in case 1, and a seven-word bar rejected it.
+    assert fs._looks_like_a_statement(
+        "l'aggravation d'une condition personnelle préexistante"
+    )
+
+
 def test_a_form_caption_is_not_an_unrated_sequela(store, pack):
     """`Atteinte permanente à l'intégrité physique ou psychique CONSOLIDATION (Inscrire la
     date)` is grammatical and long enough to pass a word count. It has to be excluded on

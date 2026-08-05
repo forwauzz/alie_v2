@@ -123,7 +123,11 @@ def _absent(unit: ReportUnit, spec: dict) -> Record:
 #: *field labels* far more often than clinical statements — `Sommaire de prise en charge et
 #: d'évolution` is a form title, `Code de séquelle` is a field caption. A label names a
 #: topic; a finding asserts something about it, and asserting takes words.
-MIN_STATEMENT_WORDS = 7
+#: Counted in *words*, so the bar is lower than it looks. At 7 it cost the one true
+#: confounder on case 1 — "l'aggravation d'une condition personnelle préexistante" is five
+#: words and unambiguously a finding. The digit exclusion above is what actually rejects
+#: the banners; the count only has to exclude captions.
+MIN_STATEMENT_WORDS = 5
 
 
 #: Text that tells the reader what to do rather than saying what happened. A form caption
@@ -144,7 +148,11 @@ FORM_INSTRUCTION = re.compile(
 
 
 def _looks_like_a_statement(sentence: str) -> bool:
-    words = re.findall(r"\w+", sentence)
+    # Words, not tokens. `\w+` counts digit groups, so the fax banner
+    # `2023-03-13 42:45 (450) 848-1695 = 6e aggravation.` reached seven "words" on a date,
+    # a time and a phone number and was read as a clinical finding. A statement is made of
+    # words; a banner is made of numbers.
+    words = re.findall(r"[^\W\d_]{2,}", sentence)
     if len(words) < MIN_STATEMENT_WORDS:
         return False
     if FORM_INSTRUCTION.search(sentence):
