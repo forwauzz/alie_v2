@@ -13,6 +13,36 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def load_dotenv(path: Path | None = None) -> list[str]:
+    """Read `.env` into the process environment. Returns the names it set, never values.
+
+    Secrets still come from the environment, never from code (§13.4) — this only spares a
+    developer from exporting them by hand in every shell. `.env` is gitignored, and no
+    value in it is ever read by ALIE itself: `ANTHROPIC_API_KEY` is consumed by the
+    Anthropic SDK, which reads the environment directly.
+
+    **An existing environment variable always wins.** A file on disk must never silently
+    override a key exported for one run, or you get a run that used a different credential
+    than the one you set and no way to tell from the output.
+    """
+    env_file = path or (REPO_ROOT / ".env")
+    if not env_file.exists():
+        return []
+
+    applied: list[str] = []
+    for line in env_file.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        name = name.strip()
+        if not name or name in os.environ:
+            continue
+        os.environ[name] = value.strip().strip('"').strip("'")
+        applied.append(name)
+    return applied
+
+
 def _env_path(name: str, default: Path) -> Path:
     raw = os.environ.get(name)
     return Path(raw).resolve() if raw else default
@@ -49,6 +79,9 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    # Before anything reads the environment, so `.env` can supply ALIE_* paths and ports
+    # as well as credentials. Anything already exported still wins.
+    load_dotenv()
     var = _env_path("ALIE_VAR_DIR", REPO_ROOT / "var")
     return Settings(
         var_dir=var,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from alie import flags
@@ -232,3 +234,52 @@ def test_every_class_has_a_date_rule():
         table = pack.date_rule_table
         for spec in pack.class_list:
             assert spec["id"] in table, f"{pack_id}: {spec['id']} has no date rule"
+
+
+def test_dotenv_never_overrides_an_exported_variable(tmp_path, monkeypatch):
+    """A file on disk must never silently beat a key exported for one run, or you get a
+    run that used a different credential than the one you set, with no way to tell from
+    the output (§13.4)."""
+    from alie.config import load_dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("ALIE_TEST_TOKEN=from-file\n", encoding="utf-8")
+
+    monkeypatch.setenv("ALIE_TEST_TOKEN", "from-shell")
+    assert load_dotenv(env_file) == []
+    assert os.environ["ALIE_TEST_TOKEN"] == "from-shell"
+
+    monkeypatch.delenv("ALIE_TEST_TOKEN")
+    assert load_dotenv(env_file) == ["ALIE_TEST_TOKEN"]
+    assert os.environ["ALIE_TEST_TOKEN"] == "from-file"
+    monkeypatch.delenv("ALIE_TEST_TOKEN", raising=False)
+
+
+def test_dotenv_returns_names_never_values(tmp_path, monkeypatch):
+    """The return value reaches logs and stdout; a credential must not."""
+    from alie.config import load_dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text('ALIE_TEST_SECRET="sk-ant-not-a-real-key"\n', encoding="utf-8")
+    monkeypatch.delenv("ALIE_TEST_SECRET", raising=False)
+
+    applied = load_dotenv(env_file)
+
+    assert applied == ["ALIE_TEST_SECRET"]
+    assert "sk-ant" not in " ".join(applied)
+    monkeypatch.delenv("ALIE_TEST_SECRET", raising=False)
+
+
+def test_a_missing_dotenv_is_not_an_error(tmp_path):
+    from alie.config import load_dotenv
+
+    assert load_dotenv(tmp_path / "nope.env") == []
+
+
+def test_the_env_example_ships_no_value():
+    """A committed example with a real key in it is the classic way secrets leak."""
+    from pathlib import Path
+
+    for line in Path(".env.example").read_text(encoding="utf-8").splitlines():
+        if line.startswith("ANTHROPIC_API_KEY"):
+            assert line.strip() == "ANTHROPIC_API_KEY="
