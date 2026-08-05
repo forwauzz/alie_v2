@@ -425,5 +425,5 @@ def test_the_prompt_hands_the_model_each_block_length(store, use_backend):
 
     _system, user = backend.calls[0]
     assert "longueur" in user
-    for block_id, length, text in _blocks_in(user):
+    for _block_id, length, text in _blocks_in(user):
         assert int(length) == len(text)
