@@ -283,3 +283,22 @@ def test_the_env_example_ships_no_value():
     for line in Path(".env.example").read_text(encoding="utf-8").splitlines():
         if line.startswith("ANTHROPIC_API_KEY"):
             assert line.strip() == "ANTHROPIC_API_KEY="
+
+
+def test_each_task_resolves_its_own_model(monkeypatch):
+    """`ALIE_MODEL_<TASK>` is per task (§13.4). It used to fall through to
+    ALIE_MODEL_EXTRACT for every task, so choosing a cheaper extraction model would
+    silently change the transcription model too."""
+    pytest.importorskip("anthropic")
+    from alie.seams.anthropic_backend import DEFAULT_MODEL, AnthropicBackend
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-only-not-a-real-key")
+    monkeypatch.setenv("ALIE_MODEL_EXTRACT", "claude-haiku-4-5")
+    monkeypatch.delenv("ALIE_MODEL_VISION", raising=False)
+
+    assert AnthropicBackend(task="extract").name == "claude-haiku-4-5"
+    # Vision is untouched by the extraction setting.
+    assert AnthropicBackend(task="vision").name == DEFAULT_MODEL
+
+    monkeypatch.setenv("ALIE_MODEL_VISION", "claude-opus-5")
+    assert AnthropicBackend(task="vision").name == "claude-opus-5"

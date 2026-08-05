@@ -113,7 +113,7 @@ def register_if_configured() -> bool:
     try:
         from ..seams.anthropic_backend import AnthropicBackend
 
-        model_seam.register("vision", AnthropicBackend(model=os.environ.get("ALIE_MODEL_VISION")))
+        model_seam.register("vision", AnthropicBackend(task="vision"))
     except RuntimeError:
         return False
     return True

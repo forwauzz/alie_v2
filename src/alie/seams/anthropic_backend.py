@@ -31,7 +31,13 @@ DEFAULT_MAX_TOKENS = 8000
 class AnthropicBackend:
     """Implements the `ModelBackend` protocol using the official SDK."""
 
-    def __init__(self, model: str | None = None, max_tokens: int | None = None) -> None:
+    def __init__(
+        self,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        *,
+        task: str = "extract",
+    ) -> None:
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - depends on optional extra
@@ -39,7 +45,14 @@ class AnthropicBackend:
                 "the anthropic SDK is not installed; `uv pip install -e \".[model]\"`"
             ) from exc
 
-        self.name = model or os.environ.get("ALIE_MODEL_EXTRACT", DEFAULT_MODEL)
+        # `ALIE_MODEL_<TASK>`, resolved per task (§13.4). It previously fell through to
+        # `ALIE_MODEL_EXTRACT` for every task, so setting a cheaper extraction model would
+        # silently change the *transcription* model too — two different jobs behind one
+        # accidental knob, and the kind of coupling nobody discovers until the output is
+        # already worse.
+        self.name = model or os.environ.get(
+            f"ALIE_MODEL_{task.upper()}", DEFAULT_MODEL
+        )
         self.max_tokens = max_tokens or int(
             os.environ.get("ALIE_MODEL_MAX_TOKENS", DEFAULT_MAX_TOKENS)
         )
@@ -165,7 +178,7 @@ def register_if_configured() -> bool:
     if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
         return False
     try:
-        model_seam.register("extract", AnthropicBackend())
+        model_seam.register("extract", AnthropicBackend(task="extract"))
     except RuntimeError:
         return False
     return True
