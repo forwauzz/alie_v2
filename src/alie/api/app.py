@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from .. import flags as flag_registry
@@ -262,6 +262,34 @@ def export_markdown(run_id: str, doctype_code: bool | None = None) -> str:
         return render.to_markdown(
             conn, run["case_id"], rows.for_run(conn, run_id), flags=resolved
         )
+
+
+@app.get("/runs/{run_id}/export.docx")
+def export_docx(run_id: str, doctype_code: bool | None = None) -> FileResponse:
+    """The chronology as a Word document (§4.1).
+
+    Markdown is for machines. This is the artefact a paralegal edits and hands to opposing
+    counsel, so it carries the same locators and the same removal manifest.
+    """
+    from ..stages import docx_export
+
+    with db.read_only() as conn:
+        run = runs.get_run(conn, run_id)
+        if run is None:
+            raise HTTPException(404, f"unknown run: {run_id}")
+        resolved = dict(run["flags"])
+        if doctype_code is not None:
+            resolved["render.doctype_code"] = doctype_code
+        out = SETTINGS.var_dir / "exports" / f"{run_id}.docx"
+        docx_export.to_docx(
+            conn, run["case_id"], rows.for_run(conn, run_id), out, flags=resolved
+        )
+
+    return FileResponse(
+        out,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=f"chronologie-{run_id}.docx",
+    )
 
 
 @app.get("/runs/{run_id}/audit")

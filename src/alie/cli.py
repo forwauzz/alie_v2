@@ -210,6 +210,26 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    """Write the chronology as a Word document (§4.1)."""
+    from .stages import docx_export
+    from .stores import db, rows, runs
+
+    with db.read_only() as conn:
+        run = runs.get_run(conn, args.run_id)
+        if run is None:
+            print(f"unknown run: {args.run_id}", file=sys.stderr)
+            return 1
+        resolved = dict(run["flags"])
+        if args.doctype_code:
+            resolved["render.doctype_code"] = True
+        out = Path(args.out) if args.out else SETTINGS.var_dir / "exports" / f"{args.run_id}.docx"
+        docx_export.to_docx(conn, run["case_id"], rows.for_run(conn, args.run_id), out,
+                            flags=resolved)
+    print(out)
+    return 0
+
+
 def cmd_mlflow(args: argparse.Namespace) -> int:
     """Start the tracking server on its own (§13.2). Idempotent, fixed port."""
     from .eval import tracking
@@ -327,6 +347,12 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--value", help="candidate value as JSON (default: true)")
     sh.add_argument("--gold", help="one gold id; omit to compare across every gold")
     sh.set_defaults(func=cmd_shadow)
+
+    ex = sub.add_parser("export", help="write a run's chronology as a Word document")
+    ex.add_argument("run_id")
+    ex.add_argument("--out", help="output path (default var/exports/<run_id>.docx)")
+    ex.add_argument("--doctype-code", action="store_true", help="show the class code")
+    ex.set_defaults(func=cmd_export)
 
     ml = sub.add_parser("mlflow", help="start the MLflow tracking server (§13.2)")
     ml.set_defaults(func=cmd_mlflow)
