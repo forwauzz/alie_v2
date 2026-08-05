@@ -112,7 +112,7 @@ in one step.
 | `src/alie/eval/` | gold scoring, must-hold metrics, shadow mode, MLflow sink (§11, §9.1) |
 | `src/alie/seams/` | the five seams, and no more (§13.4) |
 | `src/alie/packs/` | pack + template-registry loading (§6) |
-| `packs/` | CNESST, SAAQ, IVAC — rules as data, every rule tagged, gaps declared (§6.2) |
+| `packs/` | CNESST, SAAQ, IVAC — rules as data, one-page regime skills, gaps declared (§6.2) |
 | `fixtures/` | `tiny` `hard` `dupes` `admin` `fields` `mixed`, each a gold (§13.3) |
 | `web/` | the three-pane review surface (§10.2) and the why-panel (§7.1) |
 
