@@ -52,6 +52,16 @@ class Pack:
     def class_by_id(self, class_id: str) -> dict[str, Any] | None:
         return next((c for c in self.class_list if c["id"] == class_id), None)
 
+    def class_code(self, class_id: str) -> str | None:
+        """The framework's own abbreviation for a class — `REM`, `IMG`, `CONS`.
+
+        A display preference (§9.2), shown only when `render.doctype_code` is on. It is a
+        *behaviour* flag, so it is applied at render time and never baked into a stored
+        row: turning it on must not require a re-run.
+        """
+        c = self.class_by_id(class_id)
+        return c.get("short") if c else None
+
     def class_label(self, class_id: str) -> str:
         """Human label for a class. Never falls through to the raw id — an unclassified
         unit still gets a row, and that row is read by the firm (§3.4)."""

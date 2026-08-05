@@ -247,12 +247,21 @@ def get_rows(run_id: str) -> dict:
 
 
 @app.get("/runs/{run_id}/export.md", response_class=PlainTextResponse)
-def export_markdown(run_id: str) -> str:
+def export_markdown(run_id: str, doctype_code: bool | None = None) -> str:
     with db.read_only() as conn:
         run = runs.get_run(conn, run_id)
         if run is None:
             raise HTTPException(404, f"unknown run: {run_id}")
-        return render.to_markdown(conn, run["case_id"], rows.for_run(conn, run_id))
+        # Behaviour flags apply at render time and are instantly reversible (§9), so the
+        # query parameter can override the run's own setting without a re-run. An
+        # implementation flag could never be overridden this way — it would silently
+        # describe output that the stored rows did not come from.
+        resolved = dict(run["flags"])
+        if doctype_code is not None:
+            resolved["render.doctype_code"] = doctype_code
+        return render.to_markdown(
+            conn, run["case_id"], rows.for_run(conn, run_id), flags=resolved
+        )
 
 
 @app.get("/runs/{run_id}/audit")

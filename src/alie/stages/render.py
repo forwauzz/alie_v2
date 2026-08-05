@@ -80,7 +80,19 @@ def locator_text(pack: Pack, folder_label: str, printed_label: str, needs_flag: 
     return f"{text} [pdf]" if needs_flag else text
 
 
-def to_markdown(conn: sqlite3.Connection, case_id: str, rows: list[Row]) -> str:
+def to_markdown(
+    conn: sqlite3.Connection,
+    case_id: str,
+    rows: list[Row],
+    *,
+    flags: dict | None = None,
+) -> str:
+    """Render the chronology.
+
+    `flags` carries the *behaviour* flags only — the ones that are safe mid-case and need
+    no recompute (§9). They are applied here rather than baked into a stored row, which is
+    what makes turning one on instantly reversible.
+    """
     case = cases.get_case(conn, case_id)
     pack = load_pack(case["primary_pack"])
     folders = {b["id"]: b["folder_label"] for b in cases.bundles_for_case(conn, case_id)}
@@ -101,8 +113,9 @@ def to_markdown(conn: sqlite3.Connection, case_id: str, rows: list[Row]) -> str:
 
     out.append("| " + " | ".join(headers) + " |")
     out.append("|" + "|".join(["---"] * len(headers)) + "|")
+    show_code = bool((flags or {}).get("render.doctype_code"))
     for row in undated + dated:
-        out.append(_row_markdown(row, pack, folders))
+        out.append(_row_markdown(row, pack, folders, show_code=show_code))
 
     out.extend(_removal_manifest(rows, pack, folders))
     return "\n".join(out) + "\n"
@@ -136,7 +149,9 @@ def _removal_manifest(rows: list[Row], pack: Pack, folders: dict[str, str]) -> l
     return out
 
 
-def _row_markdown(row: Row, pack: Pack, folders: dict[str, str]) -> str:
+def _row_markdown(
+    row: Row, pack: Pack, folders: dict[str, str], *, show_code: bool = False
+) -> str:
     rows_spec = pack.output.get("rows", {})
     date_cell = row.row_date.render() if not row.is_undated else "—"
     if row.row_date.status is RowStatus.AMBIGUOUS:
@@ -151,7 +166,10 @@ def _row_markdown(row: Row, pack: Pack, folders: dict[str, str]) -> str:
         for c in row.locators
     )
 
-    parts = [f"**{row.title}**"]
+    # The framework's own abbreviation, when the firm wants it (§9.2 `render.doctype_code`).
+    # A display preference: it changes how the row reads, never what the row says.
+    code = pack.class_code(row.doc_class) if show_code else None
+    parts = [f"**[{code}] {row.title}**" if code else f"**{row.title}**"]
     if row.illegible_reason:
         parts.append(f"_{rows_spec.get('illegible_label', 'Illisible')}_ — {row.illegible_reason}")
     parts.extend(f"• {b.text}" for b in row.bullets)

@@ -377,3 +377,31 @@ def test_real_case_rows_are_never_empty_when_legible(store):
     for row in rows:
         if row.illegible_reason is None:
             assert row.bullets, f"{row.title} rendered with no content"
+
+
+def test_the_doctype_code_is_a_display_preference_not_a_stored_value(store):
+    """`render.doctype_code` is a *behaviour* flag: safe mid-case, instantly reversible,
+    no recompute (§9). So it is applied at render time and never baked into a stored row —
+    the same rows must be renderable both ways."""
+    from alie.stages import assemble, render
+
+    with db.session(store.db_path) as conn:
+        case_id = build_case(conn, "tiny")
+        rows_out = assemble.run(conn, case_id).rows
+        plain = render.to_markdown(conn, case_id, rows_out)
+        coded = render.to_markdown(
+            conn, case_id, rows_out, flags={"render.doctype_code": True}
+        )
+
+    assert "[IMG]" not in plain
+    assert "[IMG] Rapport d'imagerie" in coded
+    # Same rows, two renderings. Nothing was recomputed.
+    assert plain.count("|") == coded.count("|")
+
+
+def test_every_class_the_pack_declares_has_a_short_code(pack):
+    """A code shown for some classes and blank for others reads as a data gap rather than
+    a display choice."""
+    missing = [c["id"] for c in pack.class_list if not c.get("short")]
+
+    assert not missing, f"classes with no short code: {missing}"

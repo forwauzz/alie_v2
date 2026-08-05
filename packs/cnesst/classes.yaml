@@ -33,6 +33,7 @@ classes:
 
   - id: rapport_medical
     label: Rapport médical
+    short: RM
     tag: KEY
     serials: ["1918", "1919"]
     headings:
@@ -45,6 +46,7 @@ classes:
 
   - id: rapport_imagerie
     label: Rapport d'imagerie
+    short: IMG
     tag: KEY
     declares:
       - "protocole\\s*clinique\\s*radiologique"
@@ -62,6 +64,7 @@ classes:
 
   - id: rapport_physiotherapie
     label: Rapport de physiothérapie
+    short: PHYSIO
     tag: KEY
     headings:
       - "rapport\\s*de\\s*physioth[ée]rapie"
@@ -73,6 +76,7 @@ classes:
 
   - id: rapport_ergotherapie
     label: Rapport d'ergothérapie
+    short: ERGO
     tag: KEY
     headings:
       - "rapport\\s*d.?\\s*ergoth[ée]rapie"
@@ -83,6 +87,7 @@ classes:
 
   - id: rapport_operatoire
     label: Rapport opératoire
+    short: OP
     tag: KEY
     headings:
       - "protocole\\s*op[ée]ratoire"
@@ -97,6 +102,7 @@ classes:
   # than an inference and therefore outranks heading and body scoring.
   - id: note_medecine_famille
     label: Note de médecine familiale
+    short: MF
     tag: KEY
     declares:
       - "note\\s*[-–—]\\s*m[ée]decine\\s*(?:de\\s*)?famille"
@@ -106,6 +112,7 @@ classes:
 
   - id: note_travail_social
     label: Note de travail social
+    short: TS
     tag: KEY
     declares:
       - "note\\s*[-–—]\\s*travail\\s*social"
@@ -116,6 +123,7 @@ classes:
 
   - id: note_soins_infirmiers
     label: Note de soins infirmiers
+    short: SI
     tag: KEY
     declares:
       - "note\\s*[-–—]\\s*soins\\s*infirmiers"
@@ -125,6 +133,7 @@ classes:
 
   - id: note_psychologie
     label: Note de psychologie
+    short: PSY
     tag: INF-H
     declares:
       - "note\\s*[-–—]\\s*(?:psychologie|psychoth[ée]rapie)"
@@ -132,6 +141,7 @@ classes:
 
   - id: note_consultation
     label: Note de consultation
+    short: CONS
     tag: KEY
     declares:
       - "note\\s*[-–—]\\s*consultation"
@@ -146,6 +156,7 @@ classes:
 
   - id: note_evolution
     label: Note d'évolution
+    short: EVOL
     tag: INF-H
     headings:
       - "note\\s*d.?\\s*[ée]volution"
@@ -162,6 +173,7 @@ classes:
   # is the instrument that tries to displace it.
   - id: expertise
     label: Expertise médicale
+    short: EXP
     tag: KEY
     declares:
       - "expertise\\s*m[ée]dicale"
@@ -179,6 +191,7 @@ classes:
 
   - id: certificat_medical
     label: Certificat médical
+    short: CM
     tag: KEY
     headings:
       - "certificat\\s*m[ée]dical"
@@ -189,6 +202,7 @@ classes:
 
   - id: resultat_laboratoire
     label: Résultat de laboratoire
+    short: LAB
     tag: KEY
     headings:
       - "r[ée]sultat\\s*de\\s*laboratoire"
@@ -199,6 +213,7 @@ classes:
 
   - id: correspondance
     label: Correspondance
+    short: CORR
     tag: INF-H
     headings:
       - "\\bobjet\\s*:"
@@ -207,6 +222,7 @@ classes:
 
   - id: administratif
     label: Document administratif
+    short: ADM
     tag: INF-H
     # Zero-content *clinical* documents are kept as title-only rows for evidentiary
     # completeness; the zero-content filter applies to admin classes only (§8.5). The
