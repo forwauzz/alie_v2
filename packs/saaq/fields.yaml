@@ -33,10 +33,17 @@ fields:
   - id: intercurrent_event
     kind: cue_span
     tag: INF-H
+    # Derived from real documents rather than from how the concept is named. On case 1,
+    # `RRA`, `nouvel accident` and `événement intercurrent` read zero across 81 units,
+    # while `rechute`, `récidive`, `aggravation` and the bare adjective `intercurrente`
+    # are what the text actually says. The statement guard rejects the form captions.
     cues:
-      - "\\b[ée]v[ée]nement\\s*intercurrent\\b"
+      - "\\bintercurrent"
+      - "\\brechute\\b"
+      - "\\br[ée]cidive\\b"
+      - "\\baggravation\\b"
+      - "\\bchute\\b"
       - "\\bnouvel\\s*accident\\b"
-      - "\\bnouvelle\\s*l[ée]sion\\b"
 
   - id: procured_by
     kind: classify

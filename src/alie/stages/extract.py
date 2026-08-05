@@ -33,6 +33,7 @@ from ..seams import model as model_seam
 from ..stores import audit, cases, manifest
 from ..stores import blocks as blocks_store
 from ..stores.records import Record, replace_for_unit
+from . import subdivide
 
 #: Output schema. Every field is an identifier or an integer — there is nowhere for the
 #: model to write a sentence, which is what makes the grounding guarantee structural.
@@ -90,6 +91,11 @@ class ExtractResult:
     output_tokens: int = 0
     skipped: str | None = None
     injection_notes: tuple[str, ...] = field(default_factory=tuple)
+    #: How many calls this unit took. >1 means it was subdivided by its own structure
+    #: because it was long enough that one call risked being cut off (§12).
+    parts: int = 1
+    #: Why it was or was not split, so "one part" never has to be guessed at.
+    subdivision: str | None = None
 
     @property
     def groundedness(self) -> float:
@@ -131,7 +137,6 @@ def run_unit(
         return skip("no_blocks")
 
     prompt = resolve_prompt(pack, "extract_row_lines", doc_class=unit.doc_class)
-    system, user = _render(prompt, unit, blocks, pack, already_resolved)
 
     backend = _backend()
     if backend is None:
@@ -146,16 +151,46 @@ def run_unit(
             "the extract task needs a backend supporting constrained span selection"
         )
 
-    payload, response = backend.select(system, user, SELECTION_SCHEMA)
+    # A genuinely long unit — the 40-page expertise — is subdivided by the document's own
+    # structure, never by character count, and each part is its own call. One call
+    # carrying a whole expertise is the call most likely to be cut off (§12).
+    division = subdivide.subdivide(unit.id, blocks)
 
-    # Truncation is release-blocking, not diagnostic (§12). A cut-off selection is
-    # well-formed and looks complete — half a report's findings, silently. The stage
-    # enforces this rather than trusting the backend to, because "the model returned
-    # fewer lines" and "the model was cut off" are indistinguishable downstream.
-    lines = [] if response.truncated else payload.get("lines", [])
-    kept, rejected = _verify(lines, blocks)
-    if response.truncated:
-        rejected = [f"response truncated ({response.stop_reason}); selection discarded"]
+    selected: list[dict] = []
+    kept: list = []
+    rejected: list[str] = []
+    notes: list[str] = []
+    truncated_parts = 0
+    response = None
+    tokens_in = tokens_out = 0
+
+    for part in division.parts:
+        system, user = _render(prompt, unit, list(part.blocks), pack, already_resolved)
+        payload, response = backend.select(system, user, SELECTION_SCHEMA)
+        tokens_in += response.input_tokens
+        tokens_out += response.output_tokens
+        notes.extend(payload.get("notes", []))
+
+        # Truncation is release-blocking, not diagnostic (§12). A cut-off selection is
+        # well-formed and looks complete — half a report's findings, silently. The stage
+        # enforces this rather than trusting the backend to, because "the model returned
+        # fewer lines" and "the model was cut off" are indistinguishable downstream.
+        lines = payload.get("lines", [])
+        selected.extend(lines)
+        if response.truncated:
+            truncated_parts += 1
+            label = part.heading or f"part {part.index}"
+            rejected.append(
+                f"response truncated ({response.stop_reason}) on {label}; selection discarded"
+            )
+            continue
+
+        # Verified against *this part's* blocks. A span pointing into another section is
+        # rejected exactly as one pointing into another unit is — the grounding guarantee
+        # does not loosen because the document was long.
+        part_kept, part_rejected = _verify(lines, list(part.blocks))
+        kept.extend(part_kept)
+        rejected.extend(part_rejected)
 
     records = [
         Record(
@@ -182,13 +217,17 @@ def run_unit(
         unit_id=unit.id,
         prompt=prompt.ref,
         model=response.model,
-        selected=len(payload.get("lines", [])),
+        selected=len(selected),
         kept=len(kept),
         rejected=tuple(rejected),
-        stop_reason=response.stop_reason,
-        input_tokens=response.input_tokens,
-        output_tokens=response.output_tokens,
-        injection_notes=tuple(payload.get("notes", [])),
+        # Any part truncating makes the unit's answer partial. Reporting the last part's
+        # clean `end_turn` would hide that a middle section was cut off.
+        stop_reason="max_tokens" if truncated_parts else response.stop_reason,
+        input_tokens=tokens_in,
+        output_tokens=tokens_out,
+        injection_notes=tuple(notes),
+        parts=len(division.parts),
+        subdivision=division.reason,
     )
     audit.record(
         conn, subject_type="unit", subject_id=unit.id, action="extract", run_id=run_id,
@@ -199,6 +238,8 @@ def run_unit(
             "rejected": list(result.rejected),
             "groundedness": result.groundedness,
             "stop_reason": result.stop_reason,
+            "parts": result.parts,
+            "subdivision": result.subdivision,
             "input_tokens": result.input_tokens,
             "output_tokens": result.output_tokens,
             "notes": list(result.injection_notes),

@@ -168,6 +168,62 @@ def test_a_truncated_response_yields_nothing_rather_than_half_a_document(store, 
     assert result.kept == 0
 
 
+def test_a_truncated_middle_section_never_reports_a_clean_run(store, monkeypatch):
+    """A long unit is subdivided, so several calls answer for one unit. If a middle part
+    is cut off and the last one ends cleanly, reporting the last part's `end_turn` would
+    hide that half the document's findings are missing (§12)."""
+    from alie.stages import subdivide
+
+    # The threshold is a constant, not the behaviour: lowering it lets a real unit take
+    # the multi-part path without inventing a 40-page fixture.
+    monkeypatch.setattr(subdivide, "LONG_UNIT_CHARS", 1)
+    monkeypatch.setattr(subdivide, "MIN_SECTION_CHARS", 1)
+
+    stop_reasons = iter(["max_tokens", "end_turn", "end_turn", "end_turn"])
+
+    class Mixed(FakeBackend):
+        def select(self, system, user, schema, *, max_tokens=None):
+            self.calls.append((system, user))
+            return {"lines": [], "notes": []}, model_seam.ModelResponse(
+                text="", model=self.name, stop_reason=next(stop_reasons, "end_turn"),
+                input_tokens=100, output_tokens=10,
+            )
+
+    backend = Mixed({"lines": [], "notes": []})
+    model_seam.register("extract", backend)
+    try:
+        with db.session(store.db_path) as conn:
+            # The physio report spans two pages with headings on each — real structure.
+            unit = _unit(conn, predicate=lambda u: len(u.pages) > 1)
+            result = extract.run_unit(conn, unit.id)
+    finally:
+        model_seam._BACKENDS.pop("extract", None)
+
+    assert result.parts > 1, "the unit should have been subdivided"
+    assert len(backend.calls) == result.parts, "one call per part"
+    # The first part truncated and the rest did not. The unit's answer is still partial.
+    assert result.stop_reason == "max_tokens"
+    assert any("truncated" in r for r in result.rejected)
+    # Tokens are summed across parts, not taken from the last one.
+    assert result.input_tokens == 100 * result.parts
+
+
+def test_a_long_unit_costs_more_than_one_call(store, use_backend):
+    """Tokens are summed across parts. Reporting one part's usage would understate the
+    cost of exactly the documents that cost most (§11.3)."""
+    backend = use_backend({"lines": [], "notes": []})
+    with db.session(store.db_path) as conn:
+        unit = _unit(conn)
+        result = extract.run_unit(conn, unit.id)
+
+    # The tiny fixture is short, so one part — but the accounting path is the same one a
+    # subdivided unit uses, and the reason is recorded rather than assumed.
+    assert result.parts == 1
+    assert result.subdivision == "short_enough"
+    assert (result.input_tokens, result.output_tokens) == (1200, 90)
+    assert len(backend.calls) == result.parts
+
+
 def test_the_model_is_never_asked_to_choose_the_date(store, use_backend):
     """Extraction output is overwritten by the engine's decision (§8.4), so the row date
     is not in the schema at all."""

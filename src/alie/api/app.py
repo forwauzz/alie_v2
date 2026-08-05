@@ -261,6 +261,37 @@ def get_audit(run_id: str) -> list[dict]:
         return audit.for_run(conn, run_id)
 
 
+@app.get("/runs/{run_id}/product")
+def get_product_metrics(run_id: str) -> dict:
+    """Whether the firm keeps using the thing (§11.5).
+
+    Extraction metrics cannot see this failure: a system can score perfectly on
+    groundedness while flagging so much that nobody reads the flags, which silently
+    disables the main safety mechanism.
+    """
+    from ..eval import product
+
+    with db.read_only() as conn:
+        try:
+            metrics = product.for_run(conn, run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {
+        "case_id": metrics.case_id,
+        "rows": metrics.rows,
+        "accepted_unedited": metrics.accepted_unedited,
+        "accept_rate": metrics.accept_rate,
+        "reviewed": metrics.reviewed,
+        "flagged": metrics.flag_precision.flagged,
+        "flag_precision": metrics.flag_precision.precision,
+        "flag_recall": metrics.flag_precision.recall,
+        "corrections_not_flagged": metrics.flag_precision.missed,
+        "seconds_to_draft": metrics.seconds_to_draft,
+        "summary": metrics.summary(),
+    }
+
+
 # ------------------------------------------------------------- review and corrections
 
 

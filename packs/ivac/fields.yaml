@@ -38,8 +38,14 @@ fields:
   - id: intercurrent_event
     kind: cue_span
     tag: INF-H
+    # `événement intercurrent` read zero on a real CNESST file; the documents say
+    # `intercurrente` as a bare adjective, and `rechute` / `récidive` / `aggravation`.
+    # Kept alongside the offence-specific wording this regime needs.
     cues:
-      - "\\b[ée]v[ée]nement\\s*intercurrent\\b"
+      - "\\bintercurrent"
+      - "\\brechute\\b"
+      - "\\br[ée]cidive\\b"
+      - "\\baggravation\\b"
       - "\\bnouvelle\\s*agression\\b"
       - "\\bnouvel\\s*[ée]v[ée]nement\\s*traumatique\\b"
 

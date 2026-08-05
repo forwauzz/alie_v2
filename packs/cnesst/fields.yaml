@@ -63,12 +63,31 @@ fields:
   - id: intercurrent_event
     kind: cue_span
     tag: INF-H
+    # Derived from case 1, not guessed. The first version of these cues read **zero**
+    # across 81 units of a file that plainly contains intercurrent events, because they
+    # were written from how the concept is *named* rather than how documents *say* it:
+    #
+    #   `\bRRA\b`                       0 hits — the abbreviation is never used
+    #   `nouvel accident`               0 hits — not the vocabulary
+    #   `nouvelle lésion`               0 hits
+    #   `rechute, récidive ou aggravation`  0 — the forms say "récidive, rechute ou",
+    #                                       a different order, and the words also arrive
+    #                                       split across blocks
+    #   `événement intercurrent`        0 — the real text reads "amputation
+    #                                       intercurrente", the adjective without the noun
+    #
+    # while `rechute` appeared 71 times, `récidive` 60 and `aggravation` 37. Most of those
+    # are the RRA form's own printed caption, which the statement guard already rejects —
+    # a label names a topic, a finding asserts something about it.
     cues:
-      - "\\b[ée]v[ée]nement\\s*intercurrent\\b"
-      - "\\bnouvel\\s*accident\\b"
-      - "\\bnouvelle\\s*l[ée]sion\\b"
-      - "\\brechute\\s*,?\\s*r[ée]cidive\\s*ou\\s*aggravation\\b"
-      - "\\bRRA\\b"
+      - "\\bintercurrent"
+      - "\\brechute\\b"
+      - "\\br[ée]cidive\\b"
+      - "\\baggravation\\b"
+      # A fall during the claim is the ordinary intercurrent event in these files:
+      # "Le 25 a fait une chute accidentelle", "Détérioration du tableau suite à une
+      # chute". Broad on purpose and tagged INF-H, so a human confirms each one.
+      - "\\bchute\\b"
 
   # Sequelae argued but absent from the official rating (§8.6). Derived by comparing what
   # the text claims against the barème rows 4a read — a claim with no code is exactly what
