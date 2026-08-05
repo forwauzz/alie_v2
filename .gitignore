@@ -19,8 +19,12 @@ mlruns/
 mlartifacts/
 
 # Secrets and config (§13.4: config/secrets never in code)
+# Every .env variant, however the editor named it. Windows appends `.txt` when a file is
+# saved from Notepad, and `.env.txt` slipping past a bare `.env` rule is how a key reaches
+# a public remote. Deny broadly; allow the one file that must be committed.
 .env
-.env.local
+.env.*
+!.env.example
 
 # Real case files. NEVER COMMITTED.
 #

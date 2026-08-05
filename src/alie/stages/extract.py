@@ -75,6 +75,10 @@ SELECTION_SCHEMA: dict = {
 
 MIN_SPAN_CHARS = 3
 
+#: How far past a block's end an `end` offset may sit and still be read as "the end of this
+#: block". Deliberately tiny: it absorbs an inclusive/exclusive mix-up and nothing else.
+END_TOLERANCE = 2
+
 
 @dataclass(frozen=True)
 class ExtractResult:
@@ -271,7 +275,13 @@ def _render(
     pack: Pack,
     already_resolved: frozenset[str] = frozenset(),
 ) -> tuple[str, str]:
-    listing = "\n".join(f"{b.id} | {b.text}" for b in blocks if b.is_body_text)
+    # The block's length travels with it, because v3 of the prompt tells the model the
+    # listing carries one and a prompt that describes a format the renderer does not
+    # produce is worse than one that says nothing. A model cannot respect a bound it has
+    # to infer from counting characters.
+    listing = "\n".join(
+        f"{b.id} | {len(b.text)} | {b.text}" for b in blocks if b.is_body_text
+    )
     # Fields a template already read from a known coordinate. Naming them keeps 4b from
     # re-selecting what 4a resolved deterministically — that is cost, and a chance for the
     # model to disagree with an answer that is already right (§4.2).
@@ -312,6 +322,18 @@ def _verify(
         except (KeyError, TypeError, ValueError):
             rejected.append(f"{block_id}: offsets missing or not integers")
             continue
+
+        # An `end` a hair past the block can only mean "to the end of this block", so it
+        # is clamped rather than rejected. Half-open versus closed intervals is the classic
+        # ambiguity, and on the first live run it cost three of nine spans.
+        #
+        # Clamping is safe in the way that matters: the bound moves *inward*, to this
+        # block's own length, so the slice still comes from this block and cannot reach
+        # another one. The worst case is selecting slightly more of the same block than
+        # intended — a precision loss, never an invention. Anything overshooting by more
+        # than a character or two is a different span entirely and is still rejected.
+        if end > len(block.text) and end - len(block.text) <= END_TOLERANCE:
+            end = len(block.text)
 
         if not (0 <= start < end <= len(block.text)):
             rejected.append(f"{block_id}: span [{start},{end}] outside 0..{len(block.text)}")

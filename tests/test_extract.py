@@ -59,13 +59,13 @@ def _unit(conn, name="tiny", predicate=None):
     return next(u for u in units if predicate is None or predicate(u))
 
 
-def _blocks_in(user_prompt: str) -> list[tuple[str, str]]:
-    """Parse the `id | text` listing the prompt hands the model."""
+def _blocks_in(user_prompt: str) -> list[tuple[str, str, str]]:
+    """Parse the `id | length | text` listing the prompt hands the model."""
     out = []
     for line in user_prompt.splitlines():
-        if " | " in line and line.startswith("blk_"):
-            block_id, text = line.split(" | ", 1)
-            out.append((block_id, text))
+        if line.startswith("blk_") and line.count(" | ") >= 2:
+            block_id, length, text = line.split(" | ", 2)
+            out.append((block_id, length, text))
     return out
 
 
@@ -73,7 +73,7 @@ def test_selected_spans_render_from_the_source_not_from_the_model(store, use_bac
     """The model returns offsets; code slices the document. There is no field in the
     schema it can write prose into (§1.1, §3.2)."""
     def choose(user):
-        block_id, text = _blocks_in(user)[0]
+        block_id, _length, text = _blocks_in(user)[0]
         return {"lines": [{"block_id": block_id, "start": 0, "end": len(text),
                            "field": "diagnostic"}], "notes": []}
 
@@ -94,7 +94,7 @@ def test_a_span_pointing_outside_the_document_is_rejected(store, use_backend):
     """Groundedness must be 100%, so an unverifiable span is dropped and counted — never
     rendered (§11.3)."""
     def lie(user):
-        block_id, text = _blocks_in(user)[0]
+        block_id, _length, text = _blocks_in(user)[0]
         return {"lines": [
             {"block_id": block_id, "start": 0, "end": len(text) + 500, "field": "autre"},
             {"block_id": "blk_does_not_exist", "start": 0, "end": 10, "field": "autre"},
@@ -155,7 +155,7 @@ def test_a_truncated_response_yields_nothing_rather_than_half_a_document(store, 
     """Silent output truncation is release-blocking, not diagnostic — valid-looking JSON
     with half the findings is the failure §12 exists to catch."""
     def choose(user):
-        block_id, text = _blocks_in(user)[0]
+        block_id, _length, text = _blocks_in(user)[0]
         return {"lines": [{"block_id": block_id, "start": 0, "end": len(text),
                            "field": "autre"}], "notes": []}
 
@@ -237,7 +237,7 @@ def test_the_model_is_never_asked_to_choose_the_date(store, use_backend):
 
 def test_duplicate_spans_collapse(store, use_backend):
     def twice(user):
-        block_id, text = _blocks_in(user)[0]
+        block_id, _length, text = _blocks_in(user)[0]
         span = {"block_id": block_id, "start": 0, "end": len(text), "field": "autre"}
         return {"lines": [span, dict(span)], "notes": []}
 
@@ -376,3 +376,54 @@ def test_an_unregistered_prompt_is_never_invented(pack):
 
     with pytest.raises(PromptNotFound):
         resolve(pack, "no_such_prompt", doc_class="unknown")
+
+
+def test_an_end_one_past_the_block_is_clamped_not_lost(store, use_backend):
+    """Measured on the first live run against claude-opus-5: three of nine spans were
+    rejected for ending one character past the block, because v2 never said whether `end`
+    was exclusive. Half-open versus closed is the classic ambiguity.
+
+    Clamping is safe in the direction that matters — the bound moves *inward*, to this
+    block's own length — so the slice still comes from this block and cannot reach another.
+    """
+    def one_past(user):
+        block_id, _length, text = _blocks_in(user)[0]
+        return {"lines": [{"block_id": block_id, "start": 0, "end": len(text) + 1,
+                           "field": "autre"}], "notes": []}
+
+    use_backend(one_past)
+    with db.session(store.db_path) as conn:
+        unit = _unit(conn)
+        result = extract.run_unit(conn, unit.id)
+
+    assert result.kept == 1
+    assert result.groundedness == 1.0
+
+
+def test_a_span_far_past_the_block_is_still_rejected(store, use_backend):
+    """The tolerance absorbs an interval convention and nothing else. An `end` well past
+    the block is a different span entirely."""
+    def far_past(user):
+        block_id, _length, text = _blocks_in(user)[0]
+        return {"lines": [{"block_id": block_id, "start": 0, "end": len(text) + 40,
+                           "field": "autre"}], "notes": []}
+
+    use_backend(far_past)
+    with db.session(store.db_path) as conn:
+        unit = _unit(conn)
+        result = extract.run_unit(conn, unit.id)
+
+    assert result.kept == 0
+    assert result.groundedness == 0.0
+
+
+def test_the_prompt_hands_the_model_each_block_length(store, use_backend):
+    """A model cannot respect a bound it has to guess at."""
+    backend = use_backend({"lines": [], "notes": []})
+    with db.session(store.db_path) as conn:
+        extract.run_unit(conn, _unit(conn).id)
+
+    _system, user = backend.calls[0]
+    assert "longueur" in user
+    for block_id, length, text in _blocks_in(user):
+        assert int(length) == len(text)
