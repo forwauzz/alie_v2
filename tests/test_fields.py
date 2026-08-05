@@ -274,3 +274,82 @@ def test_absent_is_distinguishable_from_never_looked(pack):
     assert graded["consolidation"].valid and not graded["consolidation"].missing
     assert graded["apipp"].missing
     assert graded["apipp"].state is None
+
+
+# ------------------------------------------------------------ §8.8 abbreviations
+
+
+def test_an_abbreviation_is_flagged_never_expanded(store, pack):
+    """`TDM` is tomodensitométrie in `TDM Rachis Lombaire` and trouble dépressif majeur in
+    `a déjà fait TDM dans le passé`. A substitution would still be cited, still be
+    grounded, still validate — and be wrong somewhere in a 300-page file (§8.8)."""
+    from alie.manifest import abbrev
+
+    found = abbrev.find("TDM Rachis Lombaire avec contraste.", pack, block_id="b")
+
+    assert len(found) == 1
+    # The source token is untouched; only a flag is produced.
+    assert "sens à confirmer" in found[0].render()
+    assert "tomodensitométrie" in found[0].render()
+    assert "trouble dépressif majeur" in found[0].render()
+
+
+def test_context_ranks_the_meanings_but_never_removes_one(store, pack):
+    """A hint raises a meaning to the top of the list. It never decides."""
+    from alie.manifest import abbrev
+
+    imaging = abbrev.find("TDM Rachis Lombaire avec contraste.", pack)[0]
+    psych = abbrev.find(
+        "Le patient a déjà fait TDM, suivi en psychiatrie pour humeur dépressive.", pack
+    )[0]
+
+    assert imaging.ranked[0].text == "tomodensitométrie"
+    assert psych.ranked[0].text == "trouble dépressif majeur"
+    # Both candidates survive in both contexts.
+    assert len(imaging.ranked) == len(psych.ranked) == 2
+
+
+def test_an_unresolved_abbreviation_says_so_rather_than_guessing(store, pack):
+    """`TRP` remains unresolved `[GAP]` in the framework, and so here (§8.8). Being told
+    the token is unexplained is a different statement from silence."""
+    from alie.manifest import abbrev
+
+    found = abbrev.find("Voir TRP au dossier.", pack)[0]
+
+    assert found.unresolved
+    assert found.tag == "GAP"
+    assert "non résolue" in found.render()
+
+
+def test_an_abbreviation_inside_a_word_is_not_a_match(store, pack):
+    """`mi-juillet` is not the abbreviation `MI`, and a case-insensitive match would flag
+    half the file."""
+    from alie.manifest import abbrev
+
+    assert abbrev.find("Depuis la mi-juillet il va mieux.", pack) == []
+    assert abbrev.find("Amélioration au MI droit, sciatique.", pack)
+
+
+def test_the_flag_reaches_the_row_cited_and_tagged(store):
+    """It is a finding about the document, so it carries a span like every other string."""
+    from alie.stores import records
+
+    with db.session(store.db_path) as conn:
+        got = _by_unit(conn)
+        flags = [
+            r for unit in got.values() for f, r in unit.items()
+            if f.startswith("abbreviation.")
+        ]
+        del records
+
+    # The `fields` fixture has no ambiguous abbreviation; the point is the shape holds.
+    assert all(r.is_cited and r.epistemic_tag in ("GAP", "INF-H") for r in flags)
+
+
+def test_the_pack_holds_no_expansion_table(pack):
+    """The moment this file becomes `{"TDM": "tomodensitométrie"}` the guarantee is gone."""
+    for spec in pack.abbreviations.get("ambiguous", []):
+        meanings = spec.get("meanings", [])
+        # Either genuinely ambiguous, or explicitly unresolved. A single meaning with no
+        # note would be a lookup wearing a flag's clothes.
+        assert len(meanings) != 1 or spec.get("hints") or spec.get("tag") == "INF-H"

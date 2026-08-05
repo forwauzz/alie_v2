@@ -1,0 +1,57 @@
+# Context-dependent abbreviations (PRD §8.8).
+#
+# `TDM` is *tomodensitométrie* in `TDM Rachis Lombaire` and *trouble dépressif majeur* in
+# `a déjà fait TDM dans le passé`. The same three letters, two unrelated meanings, and no
+# lookup table can tell them apart — the surrounding sentence does.
+#
+# **So this file is not an expansion table.** The engine never substitutes. It marks the
+# occurrence, records every meaning the abbreviation could carry here, and leaves the
+# choice to a human or to a model that must cite its reasoning. A mechanical transform
+# would silently turn a CT scan into a depressive disorder somewhere in a 300-page file,
+# and nothing downstream could detect it.
+#
+# `hints` exist to *rank* the candidates in the review panel, never to decide. A hint that
+# matches raises a meaning to the top of the list; it never removes the others.
+
+ambiguous:
+  - abbrev: "TDM"
+    tag: GAP
+    meanings:
+      - text: tomodensitométrie
+        hints: ["\\brachis\\b", "\\bcolonne\\b", "\\bcr[âa]ne\\b", "\\bthorax\\b",
+                "\\babdomen\\b", "\\bavec\\s*contraste\\b"]
+      - text: trouble dépressif majeur
+        hints: ["\\bd[ée]pressi", "\\bpsychiatr", "\\bhumeur\\b", "\\banxi[ée]t[ée]\\b"]
+
+  - abbrev: "RRA"
+    tag: GAP
+    meanings:
+      - text: rechute, récidive ou aggravation
+        hints: ["\\brechute\\b", "\\br[ée]cidive\\b", "\\baggravation\\b", "\\bCNESST\\b"]
+      - text: réadaptation
+        hints: ["\\br[ée]adaptation\\b", "\\bprogramme\\b"]
+
+  - abbrev: "EMG"
+    tag: INF-H
+    meanings:
+      - text: électromyographie
+        hints: ["\\bnerf\\b", "\\bconduction\\b", "\\bradiculopathie\\b", "\\bneuro"]
+
+  - abbrev: "MI"
+    tag: GAP
+    meanings:
+      - text: membre inférieur
+        hints: ["\\bjambe\\b", "\\bgenou\\b", "\\bcheville\\b", "\\bsciatique\\b",
+                "\\blombaire\\b"]
+      - text: infarctus du myocarde
+        hints: ["\\bcardia", "\\bcoronar", "\\bthoracique\\b"]
+
+  # The framework leaves this one unresolved and so does this pack (§8.8). Declared with no
+  # meanings at all: the reader is told the token is an unexpanded abbreviation and that
+  # nobody has established what it stands for, which is a different statement from silence.
+  - abbrev: "TRP"
+    tag: GAP
+    meanings: []
+    note: >
+      Unresolved in the CNESST framework. Flagged wherever it appears so a paralegal can
+      supply the meaning from the file; never guessed.

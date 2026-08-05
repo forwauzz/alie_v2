@@ -126,6 +126,9 @@ field_lines:
   intercurrent_event: "Événement intercurrent : {value}"
   claimed_but_unrated: "Séquelle alléguée non retenue au barème : {value}"
   procured_by: "Rapport obtenu : {value}"
+  # Rendered as the flag it is. The value already reads "TDM — sens à confirmer : …", so
+  # the template adds nothing: expansion is a judgement, never a substitution (§8.8).
+  abbreviation: "{value}"
 
 # Stored for querying, never printed. The trajectory enum sits beside the sentence it was
 # derived from; rendering both prints the finding twice, once in her words and once in the

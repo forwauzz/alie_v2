@@ -17,7 +17,7 @@ import yaml
 
 from ..config import SETTINGS
 
-_FILES = ("pack", "classes", "dates", "filters", "fields", "output")
+_FILES = ("pack", "classes", "dates", "filters", "fields", "output", "abbreviations")
 
 #: What a firm may restate. Style, wording and which classes it wants to see — never the
 #: regime's own rules. Classes, date roles and filters are regime facts; a firm editing
@@ -44,6 +44,8 @@ class Pack:
     filters: dict[str, Any] = field(default_factory=dict)
     fields: dict[str, Any] = field(default_factory=dict)
     output: dict[str, Any] = field(default_factory=dict)
+    #: Context-dependent abbreviations (§8.8). Never an expansion table.
+    abbreviations: dict[str, Any] = field(default_factory=dict)
 
     @property
     def class_list(self) -> list[dict[str, Any]]:

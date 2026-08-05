@@ -21,6 +21,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
+from ..manifest import abbrev
 from ..models import Block, BlockType, Legibility, ReportUnit
 from ..packs import Pack
 from ..packs import load as load_pack
@@ -90,6 +91,43 @@ def read_fields(
             out.extend(_read_classify(unit, blocks, spec, pack, furniture))
         elif kind == "derived_claimed_sequelae":
             out.extend(_read_claimed_but_unrated(unit, blocks, spec, prior, furniture))
+
+    out.extend(_flag_abbreviations(unit, blocks, pack))
+    return out
+
+
+def _flag_abbreviations(unit: ReportUnit, blocks: list[Block], pack: Pack) -> list[Record]:
+    """Mark context-dependent abbreviations. Never expand one (§8.8).
+
+    `TDM` is tomodensitométrie in one sentence and trouble dépressif majeur in the next.
+    A substitution would still be cited, still be grounded, still validate — and be wrong
+    somewhere in a 300-page file with nothing able to detect it. So the record carries the
+    *ambiguity*, tagged `GAP`, cited to the token, and a human resolves it.
+    """
+    out: list[Record] = []
+    seen: set[tuple[str, str]] = set()
+    for block in blocks:
+        for found in abbrev.find(block.text, pack, block_id=block.id):
+            # One flag per abbreviation per unit. The same `TDM` on six pages of one
+            # report is one question, not six.
+            key = (found.abbrev, found.context[:40])
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                Record(
+                    unit_id=unit.id,
+                    field=f"abbreviation.{found.abbrev}",
+                    value=found.render(),
+                    stage=STAGE,
+                    confidence=block.confidence,
+                    block_id=block.id,
+                    span_start=found.span[0],
+                    span_end=found.span[1],
+                    rule="abbreviation.ambiguous",
+                    epistemic_tag=found.tag,
+                )
+            )
     return out
 
 
